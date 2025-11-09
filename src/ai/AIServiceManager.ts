@@ -37,20 +37,25 @@ export class AIServiceManager {
     const providerName = config.get<string>('aiProvider', 'claude');
     this.currentProvider = this.getProviderFromName(providerName);
 
+    console.log(`[Mireru] AI Provider selected: ${providerName} (${this.currentProvider})`);
+
     // APIキーの設定
     const claudeApiKey = config.get<string>('claude.apiKey', '');
     if (claudeApiKey) {
       this.providers.get(AIProvider.Claude)?.setApiKey(claudeApiKey);
+      console.log(`[Mireru] Claude API key configured (${claudeApiKey.substring(0, 10)}...)`);
     }
 
     const openaiApiKey = config.get<string>('openai.apiKey', '');
     if (openaiApiKey) {
       this.providers.get(AIProvider.OpenAI)?.setApiKey(openaiApiKey);
+      console.log(`[Mireru] OpenAI API key configured (${openaiApiKey.substring(0, 10)}...)`);
     }
 
     const geminiApiKey = config.get<string>('gemini.apiKey', '');
     if (geminiApiKey) {
       this.providers.get(AIProvider.Gemini)?.setApiKey(geminiApiKey);
+      console.log(`[Mireru] Gemini API key configured (${geminiApiKey.substring(0, 10)}...)`);
     }
 
     // モデルの設定
@@ -59,9 +64,12 @@ export class AIServiceManager {
 
     const openaiModel = config.get<string>('openai.model', 'gpt-4o');
     this.providers.get(AIProvider.OpenAI)?.setModel(openaiModel);
+    console.log(`[Mireru] OpenAI model: ${openaiModel}`);
 
     const geminiModel = config.get<string>('gemini.model', 'gemini-1.5-pro');
     this.providers.get(AIProvider.Gemini)?.setModel(geminiModel);
+
+    console.log(`[Mireru] Current provider configured: ${this.isConfigured()}`);
   }
 
   /**

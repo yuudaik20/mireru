@@ -13,6 +13,7 @@ import { FunctionDetector } from './analyzer/FunctionDetector';
 import { FunctionClassifier } from './analyzer/FunctionClassifier';
 import { DecorationStyles } from './decoration/DecorationStyles';
 import { FunctionDecorator } from './decoration/FunctionDecorator';
+import { BladeHoverProvider } from './blade/BladeHoverProvider';
 
 let aiService: AIServiceManager;
 let _phpParser: PhpParser;
@@ -109,6 +110,15 @@ export function activate(context: vscode.ExtensionContext) {
 
   // コマンドの登録
   registerCommands(context);
+
+  // BladeのHoverProviderを登録
+  const bladeHoverProvider = new BladeHoverProvider(aiService);
+  context.subscriptions.push(
+    vscode.languages.registerHoverProvider(
+      ['blade', 'php', 'html'],
+      bladeHoverProvider
+    )
+  );
 
   // ステータスバーアイテムの追加
   const statusBarItem = vscode.window.createStatusBarItem(

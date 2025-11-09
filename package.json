@@ -2,7 +2,7 @@
   "name": "mireru",
   "displayName": "Mireru - AI Code Intelligence",
   "description": "AI駆動のPHP/Laravelコードインテリジェンス拡張機能。コードの構造を「見える化」",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "publisher": "mireru",
   "engines": {
     "vscode": "^1.85.0"
@@ -23,6 +23,8 @@
   ],
   "activationEvents": [
     "onLanguage:php",
+    "onLanguage:blade",
+    "onLanguage:html",
     "onCommand:mireru.explain",
     "onCommand:mireru.explainWithDefinition",
     "onCommand:mireru.showUsages",
@@ -121,7 +123,7 @@
     "configuration": {
       "title": "Mireru",
       "properties": {
-        "mireru.apiProvider": {
+        "mireru.aiProvider": {
           "type": "string",
           "default": "claude",
           "enum": [
@@ -226,15 +228,6 @@
           "type": "number",
           "default": 3600,
           "description": "キャッシュの有効期限（秒）"
-        },
-        "mireru.language": {
-          "type": "string",
-          "default": "ja",
-          "enum": [
-            "ja",
-            "en"
-          ],
-          "description": "説明文の言語"
         }
       }
     },
