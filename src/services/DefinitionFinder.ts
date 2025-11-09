@@ -12,7 +12,7 @@ export interface DefinitionLocation {
   file: string;
   line: number;
   column: number;
-  type: 'function' | 'class' | 'method' | 'property' | 'constant' | 'interface' | 'trait';
+  type: 'function' | 'class' | 'method' | 'property' | 'constant' | 'interface' | 'trait' | 'variable';
   name: string;
   namespace?: string;
   className?: string;
@@ -148,6 +148,49 @@ export class DefinitionFinder {
       console.error('Error parsing document:', error);
     }
 
+    // パーサーで見つからなかった場合は、正規表現で変数代入を検索
+    const varDefinition = this.findVariableAssignment(identifier, text, filePath);
+    if (varDefinition) {
+      return varDefinition;
+    }
+
+    return null;
+  }
+
+  /**
+   * 変数代入を検索（正規表現ベース）
+   */
+  private findVariableAssignment(
+    identifier: string,
+    text: string,
+    filePath: string
+  ): DefinitionLocation | null {
+    const lines = text.split('\n');
+
+    // 変数代入のパターン: $variable = ...
+    const assignPattern = new RegExp(`\\$${identifier}\\s*=(?!=)`, 'g');
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      assignPattern.lastIndex = 0;
+      const match = assignPattern.exec(line);
+
+      if (match) {
+        const codeLines = lines.slice(i, Math.min(i + 5, lines.length));
+        const code = codeLines.join('\n');
+
+        return {
+          file: filePath,
+          line: i + 1,
+          column: match.index,
+          type: 'variable',
+          name: identifier,
+          code: code,
+          preview: `$${identifier}`
+        };
+      }
+    }
+
     return null;
   }
 
@@ -159,21 +202,35 @@ export class DefinitionFinder {
     workspaceRoot: string
   ): Promise<DefinitionLocation | null> {
     try {
-      // PHPファイルを検索（vendorディレクトリを除外）
-      const phpFiles = await glob('**/*.php', {
+      // PHP、Blade、JavaScript、TypeScript、HTMLファイルを検索（vendorディレクトリを除外）
+      const files = await glob('**/*.{php,blade.php,js,ts,jsx,tsx,html}', {
         cwd: workspaceRoot,
-        ignore: ['**/vendor/**', '**/node_modules/**'],
+        ignore: ['**/vendor/**', '**/node_modules/**', '**/dist/**', '**/build/**'],
         absolute: true
       });
 
       // 各ファイルを検索
-      for (const file of phpFiles) {
+      for (const file of files) {
         try {
           const document = await vscode.workspace.openTextDocument(file);
-          const definition = await this.findInDocument(identifier, document);
 
-          if (definition) {
-            return definition;
+          // ファイルタイプに応じた検索
+          if (file.endsWith('.js') || file.endsWith('.ts') || file.endsWith('.jsx') || file.endsWith('.tsx')) {
+            const definition = await this.findInJavaScriptDocument(identifier, document);
+            if (definition) {
+              return definition;
+            }
+          } else if (file.endsWith('.html')) {
+            const definition = await this.findInHtmlDocument(identifier, document);
+            if (definition) {
+              return definition;
+            }
+          } else {
+            // PHP/Blade
+            const definition = await this.findInDocument(identifier, document);
+            if (definition) {
+              return definition;
+            }
           }
         } catch (error) {
           // ファイルが開けない場合はスキップ
@@ -182,6 +239,123 @@ export class DefinitionFinder {
       }
     } catch (error) {
       console.error('Error searching workspace:', error);
+    }
+
+    return null;
+  }
+
+  /**
+   * JavaScriptドキュメント内で定義を検索
+   */
+  private async findInJavaScriptDocument(
+    identifier: string,
+    document: vscode.TextDocument
+  ): Promise<DefinitionLocation | null> {
+    const text = document.getText();
+    const lines = text.split('\n');
+    const filePath = document.fileName;
+
+    // パターン: function declaration
+    const funcDeclPattern = new RegExp(`\\bfunction\\s+${identifier}\\s*\\(`, 'g');
+    // パターン: const/let/var function
+    const funcExprPattern = new RegExp(`\\b(const|let|var)\\s+${identifier}\\s*=\\s*function`, 'g');
+    // パターン: arrow function
+    const arrowFuncPattern = new RegExp(`\\b(const|let|var)\\s+${identifier}\\s*=\\s*\\(.*\\)\\s*=>`, 'g');
+    // パターン: class declaration
+    const classPattern = new RegExp(`\\bclass\\s+${identifier}\\b`, 'g');
+    // パターン: method definition
+    const methodPattern = new RegExp(`\\b${identifier}\\s*\\([^)]*\\)\\s*{`, 'g');
+    // パターン: variable assignment
+    const varPattern = new RegExp(`\\b(const|let|var)\\s+${identifier}\\s*=`, 'g');
+
+    const patterns = [
+      { regex: funcDeclPattern, type: 'function' as const },
+      { regex: funcExprPattern, type: 'function' as const },
+      { regex: arrowFuncPattern, type: 'function' as const },
+      { regex: classPattern, type: 'class' as const },
+      { regex: methodPattern, type: 'method' as const },
+      { regex: varPattern, type: 'variable' as const }
+    ];
+
+    for (const { regex, type } of patterns) {
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        regex.lastIndex = 0;
+        const match = regex.exec(line);
+
+        if (match) {
+          const startLine = i + 1;
+          const column = match.index;
+
+          // コードブロックを抽出（最大10行）
+          const codeLines = lines.slice(i, Math.min(i + 10, lines.length));
+          const code = codeLines.join('\n');
+
+          return {
+            file: filePath,
+            line: startLine,
+            column: column,
+            type: type,
+            name: identifier,
+            code: code,
+            preview: `${identifier}${type === 'function' || type === 'method' ? '()' : ''}`
+          };
+        }
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * HTMLドキュメント内で定義を検索
+   */
+  private async findInHtmlDocument(
+    identifier: string,
+    document: vscode.TextDocument
+  ): Promise<DefinitionLocation | null> {
+    const text = document.getText();
+    const lines = text.split('\n');
+    const filePath = document.fileName;
+
+    // script タグ内のJavaScriptを検索
+    let inScriptTag = false;
+    let scriptStartLine = -1;
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+
+      if (line.includes('<script')) {
+        inScriptTag = true;
+        scriptStartLine = i;
+        continue;
+      }
+
+      if (line.includes('</script>')) {
+        inScriptTag = false;
+        continue;
+      }
+
+      if (inScriptTag) {
+        // JavaScript定義パターンをチェック
+        const funcPattern = new RegExp(`\\b(function\\s+${identifier}|const\\s+${identifier}|let\\s+${identifier}|var\\s+${identifier})`, 'g');
+        const match = funcPattern.exec(line);
+
+        if (match) {
+          const codeLines = lines.slice(i, Math.min(i + 5, lines.length));
+          const code = codeLines.join('\n');
+
+          return {
+            file: filePath,
+            line: i + 1,
+            column: match.index,
+            type: 'function',
+            name: identifier,
+            code: code,
+            preview: `${identifier}()`
+          };
+        }
+      }
     }
 
     return null;

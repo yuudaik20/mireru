@@ -248,12 +248,18 @@ async function handleExplainCommand() {
     return;
   }
 
-  const selection = editor.selection;
-  const selectedText = editor.document.getText(selection);
+  let selection = editor.selection;
+  let selectedText = editor.document.getText(selection);
 
+  // 選択がない場合は、カーソル位置の変数/関数を自動検出
   if (!selectedText) {
-    vscode.window.showWarningMessage('コードを選択してください');
-    return;
+    const identifierInfo = getIdentifierAtCursor(editor.document, editor.selection.active);
+    if (!identifierInfo) {
+      vscode.window.showWarningMessage('カーソル位置に変数または関数が見つかりません。コードを選択してください。');
+      return;
+    }
+    selectedText = identifierInfo.identifier;
+    selection = new vscode.Selection(identifierInfo.range.start, identifierInfo.range.end);
   }
 
   try {
@@ -305,12 +311,18 @@ async function handleExplainWithDefinitionCommand() {
     return;
   }
 
-  const selection = editor.selection;
-  const selectedText = editor.document.getText(selection);
+  let selection = editor.selection;
+  let selectedText = editor.document.getText(selection);
 
+  // 選択がない場合は、カーソル位置の変数/関数を自動検出
   if (!selectedText) {
-    vscode.window.showWarningMessage('コードを選択してください');
-    return;
+    const identifierInfo = getIdentifierAtCursor(editor.document, editor.selection.active);
+    if (!identifierInfo) {
+      vscode.window.showWarningMessage('カーソル位置に変数または関数が見つかりません。コードを選択してください。');
+      return;
+    }
+    selectedText = identifierInfo.identifier;
+    selection = new vscode.Selection(identifierInfo.range.start, identifierInfo.range.end);
   }
 
   try {
@@ -379,12 +391,18 @@ async function handleShowUsagesCommand() {
     return;
   }
 
-  const selection = editor.selection;
-  const selectedText = editor.document.getText(selection);
+  let selection = editor.selection;
+  let selectedText = editor.document.getText(selection);
 
+  // 選択がない場合は、カーソル位置の変数/関数を自動検出
   if (!selectedText) {
-    vscode.window.showWarningMessage('コードを選択してください');
-    return;
+    const identifierInfo = getIdentifierAtCursor(editor.document, editor.selection.active);
+    if (!identifierInfo) {
+      vscode.window.showWarningMessage('カーソル位置に変数または関数が見つかりません。コードを選択してください。');
+      return;
+    }
+    selectedText = identifierInfo.identifier;
+    selection = new vscode.Selection(identifierInfo.range.start, identifierInfo.range.end);
   }
 
   const workspaceFolders = vscode.workspace.workspaceFolders;
@@ -509,6 +527,80 @@ async function handleShowRoutesCommand() {
   } catch (error) {
     vscode.window.showErrorMessage(`ルート情報の取得に失敗しました: ${error}`);
   }
+}
+
+/**
+ * カーソル位置の変数・関数を自動検出
+ */
+function getIdentifierAtCursor(
+  document: vscode.TextDocument,
+  position: vscode.Position
+): { identifier: string; range: vscode.Range } | null {
+  const languageId = document.languageId;
+  const line = document.lineAt(position.line).text;
+  const charPos = position.character;
+
+  // 言語ごとの変数・関数検出パターン
+  let patterns: RegExp[] = [];
+
+  if (languageId === 'javascript' || languageId === 'typescript') {
+    // JavaScript/TypeScript: 変数、プロパティアクセス、関数呼び出し
+    patterns = [
+      /[a-zA-Z_$][a-zA-Z0-9_$]*(?:\.[a-zA-Z_$][a-zA-Z0-9_$]*)*/g,
+      /\b(?:const|let|var|function|class)\s+([a-zA-Z_$][a-zA-Z0-9_$]*)/g
+    ];
+  } else {
+    // PHP/Blade/HTML: $変数、@ディレクティブ、関数呼び出し
+    patterns = [
+      /\$[a-zA-Z_][a-zA-Z0-9_]*(?:->[a-zA-Z_][a-zA-Z0-9_]*|\[[^\]]+\])*/g,
+      /@[a-zA-Z_][a-zA-Z0-9_]*/g,
+      /[a-zA-Z_][a-zA-Z0-9_]*\s*\(/g
+    ];
+  }
+
+  // 各パターンを試す
+  for (const pattern of patterns) {
+    pattern.lastIndex = 0;
+    let match;
+
+    while ((match = pattern.exec(line)) !== null) {
+      const matchStart = match.index;
+      const matchEnd = match.index + match[0].length;
+
+      // カーソルが一致範囲内にあるかチェック
+      if (charPos >= matchStart && charPos <= matchEnd) {
+        let identifier = match[1] || match[0]; // グループがあればそれを使用
+
+        // クリーンアップ: 末尾の ( や : を削除
+        identifier = identifier.replace(/[(:]+$/, '').trim();
+
+        // $や@を除去
+        const cleanIdentifier = identifier.replace(/^\$|^@/, '');
+
+        if (cleanIdentifier) {
+          const range = new vscode.Range(
+            position.line,
+            matchStart,
+            position.line,
+            matchEnd
+          );
+
+          return { identifier: cleanIdentifier, range };
+        }
+      }
+    }
+  }
+
+  // 一致しない場合は、カーソル位置の単語を取得
+  const wordRange = document.getWordRangeAtPosition(position, /[a-zA-Z_$][a-zA-Z0-9_$]*/);
+  if (wordRange) {
+    const word = document.getText(wordRange);
+    if (word) {
+      return { identifier: word, range: wordRange };
+    }
+  }
+
+  return null;
 }
 
 /**

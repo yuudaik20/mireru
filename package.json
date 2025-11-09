@@ -80,27 +80,27 @@
       "editor/context": [
         {
           "command": "mireru.explain",
-          "when": "editorHasSelection && (editorLangId == php || editorLangId == blade || editorLangId == html || editorLangId == javascript)",
+          "when": "editorTextFocus && (editorLangId == php || editorLangId == blade || editorLangId == html || editorLangId == javascript || editorLangId == typescript)",
           "group": "mireru@1"
         },
         {
           "command": "mireru.explainWithDefinition",
-          "when": "editorHasSelection && (editorLangId == php || editorLangId == blade || editorLangId == html || editorLangId == javascript)",
+          "when": "editorTextFocus && (editorLangId == php || editorLangId == blade || editorLangId == html || editorLangId == javascript || editorLangId == typescript)",
           "group": "mireru@2"
         },
         {
           "command": "mireru.showUsages",
-          "when": "editorHasSelection && (editorLangId == php || editorLangId == blade || editorLangId == html || editorLangId == javascript)",
+          "when": "editorTextFocus && (editorLangId == php || editorLangId == blade || editorLangId == html || editorLangId == javascript || editorLangId == typescript)",
           "group": "mireru@3"
         },
         {
           "command": "mireru.analyzeCodeFlow",
-          "when": "editorHasSelection && (editorLangId == php || editorLangId == blade || editorLangId == html || editorLangId == javascript)",
+          "when": "editorTextFocus && (editorLangId == php || editorLangId == blade || editorLangId == html || editorLangId == javascript || editorLangId == typescript)",
           "group": "mireru@4"
         },
         {
           "command": "mireru.trackVariable",
-          "when": "editorHasSelection && (editorLangId == php || editorLangId == blade || editorLangId == html || editorLangId == javascript)",
+          "when": "editorTextFocus && (editorLangId == php || editorLangId == blade || editorLangId == html || editorLangId == javascript || editorLangId == typescript)",
           "group": "mireru@5"
         }
       ]
