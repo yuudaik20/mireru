@@ -8,10 +8,18 @@ import { ClaudeService } from './services/ClaudeService';
 import { PhpParser } from './parser/PhpParser';
 import { LaravelAnalyzer } from './laravel/LaravelAnalyzer';
 import { AIConfig } from './types/claude';
+import { FunctionDetector } from './analyzer/FunctionDetector';
+import { FunctionClassifier } from './analyzer/FunctionClassifier';
+import { DecorationStyles } from './decoration/DecorationStyles';
+import { FunctionDecorator } from './decoration/FunctionDecorator';
 
 let claudeService: ClaudeService;
 let _phpParser: PhpParser;
 let laravelAnalyzer: LaravelAnalyzer;
+let functionDetector: FunctionDetector;
+let functionClassifier: FunctionClassifier;
+let decorationStyles: DecorationStyles;
+let functionDecorator: FunctionDecorator;
 
 /**
  * 拡張機能がアクティベートされたときに呼ばれる
@@ -24,6 +32,26 @@ export function activate(context: vscode.ExtensionContext) {
   _phpParser = new PhpParser();
   laravelAnalyzer = new LaravelAnalyzer();
 
+  // 色分け機能の初期化
+  functionDetector = new FunctionDetector();
+  functionClassifier = new FunctionClassifier();
+  decorationStyles = new DecorationStyles();
+  functionDecorator = new FunctionDecorator(
+    functionDetector,
+    functionClassifier,
+    decorationStyles
+  );
+
+  // 分類器を初期化（データファイルを読み込み）
+  functionClassifier.initialize(context.extensionPath).then(() => {
+    console.log('FunctionClassifier initialized');
+    // 初期化完了後、現在のエディタに適用
+    const activeEditor = vscode.window.activeTextEditor;
+    if (activeEditor && activeEditor.document.languageId === 'php') {
+      applyColorization(activeEditor);
+    }
+  });
+
   // API設定を読み込み
   initializeAPIConfig();
 
@@ -32,6 +60,44 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.workspace.onDidChangeConfiguration(e => {
       if (e.affectsConfiguration('mireru')) {
         initializeAPIConfig();
+      }
+      if (e.affectsConfiguration('mireru.colorization')) {
+        // 色分け設定が変更されたら再読み込み
+        decorationStyles.reload();
+        // 全てのエディタに再適用
+        vscode.window.visibleTextEditors.forEach(editor => {
+          if (editor.document.languageId === 'php') {
+            applyColorization(editor);
+          }
+        });
+      }
+    })
+  );
+
+  // エディタの変更を監視
+  context.subscriptions.push(
+    vscode.window.onDidChangeActiveTextEditor(editor => {
+      if (editor && editor.document.languageId === 'php') {
+        applyColorization(editor);
+      }
+    })
+  );
+
+  // テキストの変更を監視
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeTextDocument(event => {
+      const editor = vscode.window.activeTextEditor;
+      if (editor && event.document === editor.document && event.document.languageId === 'php') {
+        applyColorization(editor);
+      }
+    })
+  );
+
+  // 可視範囲の変更を監視
+  context.subscriptions.push(
+    vscode.window.onDidChangeTextEditorVisibleRanges(event => {
+      if (event.textEditor.document.languageId === 'php') {
+        applyColorization(event.textEditor);
       }
     })
   );
@@ -58,6 +124,14 @@ export function activate(context: vscode.ExtensionContext) {
  */
 export function deactivate() {
   console.log('Mireru extension is now deactivated');
+
+  // リソースのクリーンアップ
+  if (decorationStyles) {
+    decorationStyles.dispose();
+  }
+  if (functionDecorator) {
+    functionDecorator.dispose();
+  }
 }
 
 /**
@@ -402,4 +476,26 @@ async function showExplanation(explanation: any) {
   });
 
   await vscode.window.showTextDocument(document, vscode.ViewColumn.Beside);
+}
+
+/**
+ * 色分け機能を適用
+ */
+function applyColorization(editor: vscode.TextEditor): void {
+  // 色分け機能が有効かチェック
+  const config = vscode.workspace.getConfiguration('mireru.colorization');
+  const enabled = config.get<boolean>('enabled', true);
+
+  if (!enabled) {
+    // 無効の場合は全てのデコレーションをクリア
+    if (functionDecorator) {
+      functionDecorator.clearAllDecorations(editor);
+    }
+    return;
+  }
+
+  // デコレーションを適用
+  if (functionDecorator && functionClassifier.isInitialized()) {
+    functionDecorator.applyDecorations(editor);
+  }
 }
