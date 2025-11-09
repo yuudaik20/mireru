@@ -1,0 +1,82 @@
+{
+  "description": "PHP標準関数リスト",
+  "categories": {
+    "array": [
+      "array_map", "array_filter", "array_reduce", "array_merge", "array_keys", "array_values",
+      "array_push", "array_pop", "array_shift", "array_unshift", "array_slice", "array_splice",
+      "array_search", "array_key_exists", "in_array", "array_diff", "array_intersect",
+      "array_unique", "array_reverse", "array_flip", "array_chunk", "array_combine",
+      "count", "sizeof", "sort", "rsort", "asort", "arsort", "ksort", "krsort",
+      "usort", "uasort", "uksort", "natsort", "natcasesort", "array_multisort",
+      "array_walk", "array_walk_recursive", "array_column", "array_fill", "array_fill_keys",
+      "range", "compact", "extract", "list", "each", "current", "key", "next",
+      "prev", "reset", "end", "shuffle", "array_rand"
+    ],
+    "string": [
+      "strlen", "substr", "strpos", "strrpos", "str_replace", "str_ireplace",
+      "preg_match", "preg_match_all", "preg_replace", "preg_split", "preg_quote",
+      "trim", "ltrim", "rtrim", "strtolower", "strtoupper", "ucfirst", "ucwords",
+      "lcfirst", "strrev", "str_repeat", "str_pad", "str_split", "str_shuffle",
+      "strcmp", "strcasecmp", "strncmp", "strncasecmp", "substr_compare",
+      "sprintf", "printf", "vsprintf", "vprintf", "sscanf", "fscanf",
+      "str_contains", "str_starts_with", "str_ends_with", "explode", "implode",
+      "join", "htmlspecialchars", "htmlentities", "html_entity_decode",
+      "strip_tags", "addslashes", "stripslashes", "quotemeta", "wordwrap",
+      "nl2br", "number_format", "money_format", "strtr", "substr_count",
+      "substr_replace", "chunk_split", "parse_str", "similar_text", "soundex",
+      "metaphone", "levenshtein"
+    ],
+    "file": [
+      "file_get_contents", "file_put_contents", "file", "readfile", "fopen",
+      "fclose", "fread", "fwrite", "fgets", "fgetc", "fputc", "fputs",
+      "feof", "fseek", "ftell", "rewind", "flock", "fflush", "ftruncate",
+      "file_exists", "is_file", "is_dir", "is_readable", "is_writable",
+      "is_executable", "filesize", "filetype", "filemtime", "fileatime",
+      "filectime", "fileperms", "fileowner", "filegroup", "touch", "unlink",
+      "rename", "copy", "mkdir", "rmdir", "opendir", "readdir", "closedir",
+      "scandir", "glob", "basename", "dirname", "pathinfo", "realpath",
+      "tempnam", "tmpfile", "disk_free_space", "disk_total_space"
+    ],
+    "json": [
+      "json_encode", "json_decode", "json_last_error", "json_last_error_msg"
+    ],
+    "database": [
+      "mysqli_connect", "mysqli_query", "mysqli_fetch_assoc", "mysqli_fetch_array",
+      "mysqli_num_rows", "mysqli_affected_rows", "mysqli_insert_id", "mysqli_close",
+      "mysqli_real_escape_string", "mysqli_error", "mysqli_errno"
+    ],
+    "date": [
+      "time", "date", "strtotime", "mktime", "strftime", "gmdate", "gmstrftime",
+      "date_create", "date_format", "date_diff", "date_add", "date_sub",
+      "timezone_open", "timezone_name_get", "checkdate", "getdate", "localtime",
+      "microtime", "gettimeofday"
+    ],
+    "math": [
+      "abs", "ceil", "floor", "round", "max", "min", "pow", "sqrt", "exp",
+      "log", "log10", "sin", "cos", "tan", "asin", "acos", "atan", "atan2",
+      "deg2rad", "rad2deg", "pi", "rand", "mt_rand", "srand", "mt_srand",
+      "getrandmax", "mt_getrandmax", "lcg_value", "decbin", "bindec", "decoct",
+      "octdec", "dechex", "hexdec", "base_convert", "number_format"
+    ],
+    "variable": [
+      "isset", "empty", "is_null", "is_array", "is_bool", "is_float",
+      "is_int", "is_integer", "is_long", "is_numeric", "is_object",
+      "is_resource", "is_scalar", "is_string", "is_callable", "gettype",
+      "settype", "var_dump", "var_export", "print_r", "serialize",
+      "unserialize", "get_defined_vars", "get_resource_type", "intval",
+      "floatval", "strval", "boolval"
+    ],
+    "misc": [
+      "die", "exit", "echo", "print", "define", "defined", "constant",
+      "sleep", "usleep", "time_nanosleep", "time_sleep_until", "function_exists",
+      "class_exists", "interface_exists", "trait_exists", "method_exists",
+      "property_exists", "get_class", "get_parent_class", "get_class_methods",
+      "get_class_vars", "get_object_vars", "get_called_class", "is_a",
+      "is_subclass_of", "call_user_func", "call_user_func_array",
+      "register_shutdown_function", "register_tick_function",
+      "unregister_tick_function", "highlight_file", "highlight_string",
+      "php_strip_whitespace", "get_browser", "connection_aborted",
+      "connection_status", "ignore_user_abort", "pack", "unpack"
+    ]
+  }
+}

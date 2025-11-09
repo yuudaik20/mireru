@@ -1,0 +1,173 @@
+{
+  "description": "Laravel関数・メソッドリスト",
+  "categories": {
+    "helpers": {
+      "description": "Laravelヘルパー関数",
+      "functions": [
+        "abort", "abort_if", "abort_unless", "app", "app_path", "asset",
+        "auth", "back", "base_path", "bcrypt", "blank", "broadcast",
+        "cache", "class_basename", "class_uses_recursive", "collect", "config",
+        "config_path", "cookie", "csrf_field", "csrf_token", "database_path",
+        "dd", "decrypt", "dispatch", "dispatch_sync", "dump", "encrypt",
+        "env", "event", "filled", "info", "logger", "logs", "method_field",
+        "mix", "now", "old", "optional", "policy", "public_path", "redirect",
+        "report", "request", "rescue", "resolve", "resource_path", "response",
+        "retry", "route", "session", "storage_path", "tap", "throw_if",
+        "throw_unless", "today", "trait_uses_recursive", "transform",
+        "validator", "value", "view", "with"
+      ]
+    },
+    "eloquent": {
+      "description": "Eloquent ORMメソッド",
+      "methods": [
+        "all", "find", "findOrFail", "findMany", "findOr", "first", "firstOrFail",
+        "firstOr", "firstOrCreate", "firstOrNew", "firstWhere", "get", "value",
+        "pluck", "chunk", "chunkById", "each", "lazy", "lazyById", "cursor",
+        "where", "whereIn", "whereNotIn", "whereBetween", "whereNotBetween",
+        "whereNull", "whereNotNull", "whereDate", "whereMonth", "whereDay",
+        "whereYear", "whereTime", "whereColumn", "whereExists", "whereHas",
+        "whereDoesntHave", "whereBelongsTo", "orWhere", "latest", "oldest",
+        "orderBy", "orderByDesc", "inRandomOrder", "limit", "take", "skip",
+        "offset", "select", "selectRaw", "distinct", "groupBy", "having",
+        "havingRaw", "join", "leftJoin", "rightJoin", "crossJoin", "union",
+        "create", "insert", "insertGetId", "insertOrIgnore", "update",
+        "updateOrInsert", "updateOrCreate", "upsert", "increment", "decrement",
+        "delete", "forceDelete", "restore", "truncate", "save", "fresh",
+        "refresh", "touch", "replicate", "is", "isNot", "fill", "forceFill",
+        "with", "load", "loadMissing", "loadCount", "without", "withCount",
+        "withExists", "withAggregate", "has", "doesntHave", "withWhereHas"
+      ]
+    },
+    "relationships": {
+      "description": "Eloquentリレーション",
+      "methods": [
+        "hasOne", "hasMany", "belongsTo", "belongsToMany", "hasManyThrough",
+        "hasOneThrough", "morphTo", "morphOne", "morphMany", "morphToMany",
+        "morphedByMany"
+      ]
+    },
+    "facades": {
+      "description": "Laravelファサード",
+      "facades": {
+        "DB": [
+          "table", "select", "insert", "update", "delete", "statement",
+          "unprepared", "transaction", "beginTransaction", "commit", "rollBack",
+          "raw", "connection", "enableQueryLog", "getQueryLog"
+        ],
+        "Cache": [
+          "get", "put", "forever", "forget", "flush", "remember",
+          "rememberForever", "pull", "add", "increment", "decrement",
+          "has", "missing", "many", "putMany"
+        ],
+        "Storage": [
+          "exists", "missing", "get", "put", "putFile", "putFileAs",
+          "prepend", "append", "delete", "copy", "move", "size",
+          "lastModified", "files", "allFiles", "directories", "allDirectories",
+          "makeDirectory", "deleteDirectory", "download", "url",
+          "temporaryUrl", "path"
+        ],
+        "Log": [
+          "emergency", "alert", "critical", "error", "warning", "notice",
+          "info", "debug", "log"
+        ],
+        "Mail": [
+          "to", "cc", "bcc", "send", "queue", "later", "raw"
+        ],
+        "Queue": [
+          "push", "pushOn", "later", "laterOn", "bulk", "size", "connection"
+        ],
+        "Redis": [
+          "get", "set", "setex", "setnx", "incr", "decr", "del", "exists",
+          "expire", "ttl", "lpush", "rpush", "lpop", "rpop", "lrange",
+          "llen", "sadd", "srem", "smembers", "sismember", "zadd", "zrem",
+          "zrange", "zrevrange", "zrank", "zscore", "publish", "subscribe"
+        ],
+        "Validator": [
+          "make", "validate", "sometimes", "after", "errors", "fails",
+          "passes", "validated"
+        ],
+        "Hash": [
+          "make", "check", "needsRehash", "info"
+        ],
+        "Crypt": [
+          "encrypt", "decrypt", "encryptString", "decryptString"
+        ],
+        "Auth": [
+          "check", "guest", "user", "id", "attempt", "login", "loginUsingId",
+          "logout", "guard", "shouldUse", "setUser"
+        ],
+        "Gate": [
+          "allows", "denies", "check", "any", "none", "authorize", "inspect",
+          "define", "before", "after", "policy", "for", "forUser"
+        ],
+        "Event": [
+          "listen", "dispatch", "fire", "subscribe", "flush", "forget",
+          "hasListeners"
+        ],
+        "Route": [
+          "get", "post", "put", "patch", "delete", "options", "any",
+          "match", "group", "prefix", "middleware", "name", "namespace",
+          "domain", "where", "resource", "apiResource", "redirect",
+          "permanentRedirect", "view", "current", "currentRouteName",
+          "currentRouteAction", "is"
+        ],
+        "Schema": [
+          "create", "table", "drop", "dropIfExists", "rename", "hasTable",
+          "hasColumn", "getColumnType", "getColumnListing", "connection",
+          "blueprintResolver", "defaultStringLength"
+        ],
+        "Session": [
+          "get", "put", "push", "flash", "now", "forget", "flush",
+          "regenerate", "invalidate", "has", "exists", "missing", "all",
+          "pull", "increment", "decrement", "token", "getId", "getName"
+        ],
+        "View": [
+          "make", "share", "composer", "creator", "exists", "file", "first"
+        ]
+      }
+    },
+    "validation": {
+      "description": "バリデーションルール",
+      "rules": [
+        "required", "required_if", "required_unless", "required_with",
+        "required_with_all", "required_without", "required_without_all",
+        "nullable", "sometimes", "filled", "present", "accepted", "active_url",
+        "after", "after_or_equal", "alpha", "alpha_dash", "alpha_num",
+        "array", "bail", "before", "before_or_equal", "between", "boolean",
+        "confirmed", "date", "date_equals", "date_format", "different",
+        "digits", "digits_between", "dimensions", "distinct", "email",
+        "ends_with", "exists", "file", "gt", "gte", "image", "in",
+        "in_array", "integer", "ip", "ipv4", "ipv6", "json", "lt", "lte",
+        "max", "mimetypes", "mimes", "min", "not_in", "not_regex",
+        "numeric", "password", "regex", "required_array_keys", "same",
+        "size", "starts_with", "string", "timezone", "unique", "url", "uuid"
+      ]
+    },
+    "collection": {
+      "description": "Collectionメソッド",
+      "methods": [
+        "all", "average", "avg", "chunk", "collapse", "collect", "combine",
+        "concat", "contains", "containsStrict", "count", "countBy",
+        "crossJoin", "dd", "diff", "diffAssoc", "diffKeys", "dump", "each",
+        "eachSpread", "every", "except", "filter", "first", "firstWhere",
+        "flatMap", "flatten", "flip", "forget", "forPage", "get",
+        "groupBy", "has", "implode", "intersect", "intersectByKeys",
+        "isEmpty", "isNotEmpty", "join", "keyBy", "keys", "last", "lazy",
+        "macro", "make", "map", "mapInto", "mapSpread", "mapToGroups",
+        "mapWithKeys", "max", "median", "merge", "mergeRecursive", "min",
+        "mode", "nth", "only", "pad", "partition", "pipe", "pipeInto",
+        "pluck", "pop", "prepend", "pull", "push", "put", "random",
+        "reduce", "reject", "replace", "replaceRecursive", "reverse",
+        "search", "shift", "shuffle", "skip", "skipUntil", "skipWhile",
+        "slice", "sole", "some", "sort", "sortBy", "sortByDesc", "sortDesc",
+        "sortKeys", "sortKeysDesc", "splice", "split", "sum", "take",
+        "takeUntil", "takeWhile", "tap", "times", "toArray", "toJson",
+        "transform", "union", "unique", "uniqueStrict", "unless",
+        "unlessEmpty", "unlessNotEmpty", "unwrap", "values", "when",
+        "whenEmpty", "whenNotEmpty", "where", "whereStrict", "whereBetween",
+        "whereIn", "whereInStrict", "whereInstanceOf", "whereNotBetween",
+        "whereNotIn", "whereNotInStrict", "whereNotNull", "whereNull", "wrap", "zip"
+      ]
+    }
+  }
+}

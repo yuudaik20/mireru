@@ -1,0 +1,12 @@
+node_modules
+out
+dist
+*.vsix
+.vscode-test
+.vscode-test-web
+*.log
+.env
+.DS_Store
+coverage
+.cache
+*.map

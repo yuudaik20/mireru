@@ -1,0 +1,9 @@
+<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+  <rect width="128" height="128" fill="#4A90E2" rx="16"/>
+  <circle cx="45" cy="50" r="12" fill="white"/>
+  <circle cx="83" cy="50" r="12" fill="white"/>
+  <circle cx="45" cy="50" r="6" fill="#4A90E2"/>
+  <circle cx="83" cy="50" r="6" fill="#4A90E2"/>
+  <path d="M 35 85 Q 64 105 93 85" stroke="white" stroke-width="6" fill="none" stroke-linecap="round"/>
+  <text x="64" y="115" font-family="Arial" font-size="14" fill="white" text-anchor="middle" font-weight="bold">Mireru</text>
+</svg>

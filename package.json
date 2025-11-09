@@ -1,0 +1,261 @@
+{
+  "name": "mireru",
+  "displayName": "Mireru - AI Code Intelligence",
+  "description": "AI駆動のPHP/Laravelコードインテリジェンス拡張機能。コードの構造を「見える化」",
+  "version": "0.1.0",
+  "publisher": "mireru",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Linters",
+    "Visualization",
+    "Education"
+  ],
+  "keywords": [
+    "php",
+    "laravel",
+    "ai",
+    "code-intelligence",
+    "claude",
+    "visualization"
+  ],
+  "activationEvents": [
+    "onLanguage:php",
+    "onCommand:mireru.explain",
+    "onCommand:mireru.explainWithDefinition",
+    "onCommand:mireru.showUsages",
+    "onCommand:mireru.showProjectMap",
+    "onCommand:mireru.showDependencyGraph",
+    "onCommand:mireru.trackVariable",
+    "onCommand:mireru.showRoutes",
+    "onCommand:mireru.openSettings"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "mireru.explain",
+        "title": "Mireru: 説明を表示"
+      },
+      {
+        "command": "mireru.explainWithDefinition",
+        "title": "Mireru: 定義と説明を表示"
+      },
+      {
+        "command": "mireru.showUsages",
+        "title": "Mireru: 使用箇所と使用方法を表示"
+      },
+      {
+        "command": "mireru.showProjectMap",
+        "title": "Mireru: プロジェクトマップを表示"
+      },
+      {
+        "command": "mireru.showDependencyGraph",
+        "title": "Mireru: 依存関係グラフを表示"
+      },
+      {
+        "command": "mireru.trackVariable",
+        "title": "Mireru: 変数を追跡"
+      },
+      {
+        "command": "mireru.showRoutes",
+        "title": "Mireru: Laravelルートを表示"
+      },
+      {
+        "command": "mireru.openSettings",
+        "title": "Mireru: 設定を開く"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "mireru.explain",
+          "when": "editorHasSelection && editorLangId == php",
+          "group": "mireru@1"
+        },
+        {
+          "command": "mireru.explainWithDefinition",
+          "when": "editorHasSelection && editorLangId == php",
+          "group": "mireru@2"
+        },
+        {
+          "command": "mireru.showUsages",
+          "when": "editorHasSelection && editorLangId == php",
+          "group": "mireru@3"
+        },
+        {
+          "command": "mireru.trackVariable",
+          "when": "editorHasSelection && editorLangId == php",
+          "group": "mireru@4"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Mireru",
+      "properties": {
+        "mireru.apiProvider": {
+          "type": "string",
+          "default": "claude",
+          "enum": [
+            "claude",
+            "openai",
+            "gemini"
+          ],
+          "description": "使用するAI APIプロバイダー"
+        },
+        "mireru.claude.apiKey": {
+          "type": "string",
+          "default": "",
+          "description": "Claude API キー"
+        },
+        "mireru.claude.model": {
+          "type": "string",
+          "default": "claude-sonnet-4-5-20250929",
+          "enum": [
+            "claude-sonnet-4-5-20250929",
+            "claude-opus-4-20250514",
+            "claude-3-5-sonnet-20241022"
+          ],
+          "description": "使用するClaudeモデル"
+        },
+        "mireru.openai.apiKey": {
+          "type": "string",
+          "default": "",
+          "description": "OpenAI API キー"
+        },
+        "mireru.openai.model": {
+          "type": "string",
+          "default": "gpt-4-turbo",
+          "enum": [
+            "gpt-4-turbo",
+            "gpt-4",
+            "gpt-3.5-turbo"
+          ],
+          "description": "使用するOpenAIモデル"
+        },
+        "mireru.colorization.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "関数の色分け表示を有効にする"
+        },
+        "mireru.colorization.phpBuiltin": {
+          "type": "string",
+          "default": "#4A90E2",
+          "description": "PHP標準関数の色"
+        },
+        "mireru.colorization.framework": {
+          "type": "string",
+          "default": "#50C878",
+          "description": "フレームワーク関数の色"
+        },
+        "mireru.colorization.userDefined": {
+          "type": "string",
+          "default": "#FF8C00",
+          "description": "ユーザー定義関数の色"
+        },
+        "mireru.colorization.library": {
+          "type": "string",
+          "default": "#9B59B6",
+          "description": "サードパーティライブラリ関数の色"
+        },
+        "mireru.colorization.showUnderline": {
+          "type": "boolean",
+          "default": true,
+          "description": "関数にアンダーラインを表示"
+        },
+        "mireru.cache.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "AI応答のキャッシュを有効にする"
+        },
+        "mireru.cache.ttl": {
+          "type": "number",
+          "default": 3600,
+          "description": "キャッシュの有効期限（秒）"
+        },
+        "mireru.language": {
+          "type": "string",
+          "default": "ja",
+          "enum": [
+            "ja",
+            "en"
+          ],
+          "description": "説明文の言語"
+        }
+      }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "mireru",
+          "title": "Mireru",
+          "icon": "resources/mireru-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "mireru": [
+        {
+          "id": "mireruExplanation",
+          "name": "説明"
+        },
+        {
+          "id": "mireruRoutes",
+          "name": "Laravelルート"
+        }
+      ]
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mireru/mireru.git"
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run package",
+    "compile": "webpack",
+    "watch": "webpack --watch",
+    "package": "webpack --mode production --devtool hidden-source-map",
+    "compile-tests": "tsc -p . --outDir out",
+    "watch-tests": "tsc -p . -w --outDir out",
+    "pretest": "npm run compile-tests && npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
+  },
+  "devDependencies": {
+    "@types/glob": "^8.1.0",
+    "@types/jest": "^29.5.11",
+    "@types/node": "^20.10.6",
+    "@types/react": "^18.2.46",
+    "@types/react-dom": "^18.2.18",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^6.15.0",
+    "@typescript-eslint/parser": "^6.15.0",
+    "@vscode/test-electron": "^2.3.8",
+    "css-loader": "^6.8.1",
+    "eslint": "^8.56.0",
+    "jest": "^29.7.0",
+    "style-loader": "^3.3.3",
+    "ts-jest": "^29.1.1",
+    "ts-loader": "^9.5.1",
+    "typescript": "^5.3.3",
+    "webpack": "^5.89.0",
+    "webpack-cli": "^5.1.4"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.30.0",
+    "axios": "^1.6.5",
+    "glob": "^10.3.10",
+    "lru-cache": "^10.1.0",
+    "micromatch": "^4.0.5",
+    "openai": "^4.24.1",
+    "php-parser": "^3.1.5",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-markdown": "^9.0.1",
+    "vis-network": "^9.1.9"
+  }
+}
