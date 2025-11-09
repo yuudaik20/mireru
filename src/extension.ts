@@ -7,6 +7,7 @@ import * as vscode from 'vscode';
 import { ClaudeService } from './services/ClaudeService';
 import { PhpParser } from './parser/PhpParser';
 import { LaravelAnalyzer } from './laravel/LaravelAnalyzer';
+import { DefinitionFinder } from './services/DefinitionFinder';
 import { AIConfig } from './types/claude';
 import { FunctionDetector } from './analyzer/FunctionDetector';
 import { FunctionClassifier } from './analyzer/FunctionClassifier';
@@ -16,6 +17,7 @@ import { FunctionDecorator } from './decoration/FunctionDecorator';
 let claudeService: ClaudeService;
 let _phpParser: PhpParser;
 let laravelAnalyzer: LaravelAnalyzer;
+let definitionFinder: DefinitionFinder;
 let functionDetector: FunctionDetector;
 let functionClassifier: FunctionClassifier;
 let decorationStyles: DecorationStyles;
@@ -31,6 +33,7 @@ export function activate(context: vscode.ExtensionContext) {
   claudeService = new ClaudeService();
   _phpParser = new PhpParser();
   laravelAnalyzer = new LaravelAnalyzer();
+  definitionFinder = new DefinitionFinder();
 
   // 色分け機能の初期化
   functionDetector = new FunctionDetector();
@@ -283,9 +286,81 @@ async function handleExplainCommand() {
  * 定義と説明コマンドを処理
  */
 async function handleExplainWithDefinitionCommand() {
-  vscode.window.showInformationMessage(
-    'この機能は実装中です (定義と説明を表示)'
-  );
+  const editor = vscode.window.activeTextEditor;
+  if (!editor) {
+    vscode.window.showErrorMessage('アクティブなエディタがありません');
+    return;
+  }
+
+  if (!claudeService.isConfigured()) {
+    const result = await vscode.window.showErrorMessage(
+      'Mireru: API キーが設定されていません',
+      '設定を開く'
+    );
+    if (result === '設定を開く') {
+      await vscode.commands.executeCommand('mireru.openSettings');
+    }
+    return;
+  }
+
+  const selection = editor.selection;
+  const selectedText = editor.document.getText(selection);
+
+  if (!selectedText) {
+    vscode.window.showWarningMessage('コードを選択してください');
+    return;
+  }
+
+  try {
+    await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: 'Mireru: 定義を検索中...',
+        cancellable: false
+      },
+      async (progress) => {
+        // 定義を検索
+        const workspaceFolders = vscode.workspace.workspaceFolders;
+        const workspaceRoot = workspaceFolders ? workspaceFolders[0].uri.fsPath : '';
+
+        progress.report({ message: '定義を検索中...' });
+        const definition = await definitionFinder.findDefinition(
+          selectedText.trim(),
+          editor.document,
+          workspaceRoot
+        );
+
+        // コンテキストを構築
+        progress.report({ message: 'AI が分析中...' });
+        const context = await buildCodeContext(editor, selection, selectedText);
+
+        // 定義情報をコンテキストに追加
+        if (definition) {
+          context.definition = {
+            file: definition.file,
+            line: definition.line,
+            type: definition.type,
+            code: definition.code,
+            preview: definition.preview,
+            namespace: definition.namespace,
+            className: definition.className
+          };
+        }
+
+        // AI説明を取得
+        const explanation = await claudeService.explain(
+          selectedText,
+          context.codeType,
+          context
+        );
+
+        // 定義と説明を表示
+        await showDefinitionAndExplanation(definition, explanation, selectedText);
+      }
+    );
+  } catch (error) {
+    vscode.window.showErrorMessage(`定義の検索に失敗しました: ${error}`);
+  }
 }
 
 /**
@@ -476,6 +551,149 @@ async function showExplanation(explanation: any) {
   });
 
   await vscode.window.showTextDocument(document, vscode.ViewColumn.Beside);
+}
+
+/**
+ * 定義と説明を表示
+ */
+async function showDefinitionAndExplanation(
+  definition: any,
+  explanation: any,
+  identifier: string
+) {
+  // マークダウン形式で表示
+  let content = `# ${explanation.title}\n\n`;
+
+  // 定義情報セクション
+  if (definition) {
+    content += `## 📍 定義\n\n`;
+    content += `**種別**: ${getTypeLabel(definition.type)}\n\n`;
+
+    if (definition.namespace) {
+      content += `**名前空間**: ${definition.namespace}\n\n`;
+    }
+
+    if (definition.className) {
+      content += `**クラス**: ${definition.className}\n\n`;
+    }
+
+    // ファイルパスと行番号
+    const relativePath = vscode.workspace.asRelativePath(definition.file);
+    content += `**場所**: [${relativePath}:${definition.line}](${vscode.Uri.file(definition.file).toString()}#L${definition.line})\n\n`;
+
+    // 定義のコードプレビュー
+    if (definition.code) {
+      const previewCode = definition.code.split('\n').slice(0, 10).join('\n');
+      content += `\`\`\`php\n${previewCode}\n\`\`\`\n\n`;
+
+      if (definition.code.split('\n').length > 10) {
+        content += `*... (定義の全体を見るには上記リンクをクリック)*\n\n`;
+      }
+    }
+
+    content += `---\n\n`;
+  } else {
+    content += `## ⚠️ 定義\n\n`;
+    content += `\`${identifier}\` の定義が見つかりませんでした。\n\n`;
+    content += `これは以下の理由が考えられます:\n`;
+    content += `- PHP標準関数またはLaravelフレームワーク関数\n`;
+    content += `- vendorディレクトリ内のライブラリ関数\n`;
+    content += `- 動的に定義された関数\n\n`;
+    content += `---\n\n`;
+  }
+
+  // AI説明セクション
+  content += `## 🤖 AI による詳細説明\n\n`;
+  content += `**種別**: ${explanation.functionType}\n\n`;
+  content += `${explanation.description}\n\n`;
+
+  if (explanation.parameters && explanation.parameters.length > 0) {
+    content += `### パラメータ\n\n`;
+    for (const param of explanation.parameters) {
+      content += `- **${param.name}** (${param.type}): ${param.description}\n`;
+    }
+    content += '\n';
+  }
+
+  if (explanation.returnType) {
+    content += `### 返り値\n\n`;
+    content += `- **型**: ${explanation.returnType}\n`;
+    if (explanation.returnDescription) {
+      content += `- **説明**: ${explanation.returnDescription}\n`;
+    }
+    content += '\n';
+  }
+
+  if (explanation.example) {
+    content += `### 使用例\n\n\`\`\`php\n${explanation.example}\n\`\`\`\n\n`;
+  }
+
+  if (explanation.warnings && explanation.warnings.length > 0) {
+    content += `### ⚠️ 注意点\n\n`;
+    explanation.warnings.forEach((w: string) => {
+      content += `- ${w}\n`;
+    });
+    content += '\n';
+  }
+
+  // ドキュメントを開く
+  const document = await vscode.workspace.openTextDocument({
+    content,
+    language: 'markdown'
+  });
+
+  await vscode.window.showTextDocument(document, vscode.ViewColumn.Beside);
+
+  // 定義が見つかった場合、ジャンプ用のボタンを表示
+  if (definition) {
+    const jumpButton = await vscode.window.showInformationMessage(
+      `${identifier} の定義が見つかりました`,
+      '定義へジャンプ'
+    );
+
+    if (jumpButton === '定義へジャンプ') {
+      await jumpToDefinition(definition);
+    }
+  }
+}
+
+/**
+ * 定義タイプのラベルを取得
+ */
+function getTypeLabel(type: string): string {
+  const labels: { [key: string]: string } = {
+    'function': '関数',
+    'class': 'クラス',
+    'method': 'メソッド',
+    'property': 'プロパティ',
+    'constant': '定数',
+    'interface': 'インターフェース',
+    'trait': 'トレイト'
+  };
+  return labels[type] || type;
+}
+
+/**
+ * 定義位置へジャンプ
+ */
+async function jumpToDefinition(definition: any) {
+  try {
+    const document = await vscode.workspace.openTextDocument(definition.file);
+    const position = new vscode.Position(definition.line - 1, definition.column);
+
+    await vscode.window.showTextDocument(document, {
+      selection: new vscode.Range(position, position),
+      viewColumn: vscode.ViewColumn.One
+    });
+
+    // カーソル位置を中央に表示
+    vscode.commands.executeCommand('revealLine', {
+      lineNumber: definition.line - 1,
+      at: 'center'
+    });
+  } catch (error) {
+    vscode.window.showErrorMessage(`定義へのジャンプに失敗しました: ${error}`);
+  }
 }
 
 /**
