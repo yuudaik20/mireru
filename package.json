@@ -2,7 +2,7 @@
   "name": "mireru",
   "displayName": "Mireru - AI Code Intelligence",
   "description": "AI駆動のPHP/Laravelコードインテリジェンス拡張機能。コードの構造を「見える化」",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "publisher": "mireru",
   "engines": {
     "vscode": "^1.85.0"
@@ -92,6 +92,32 @@
         }
       ]
     },
+    "keybindings": [
+      {
+        "command": "mireru.explain",
+        "key": "ctrl+shift+e",
+        "mac": "cmd+shift+e",
+        "when": "editorTextFocus && editorHasSelection && editorLangId == php"
+      },
+      {
+        "command": "mireru.explainWithDefinition",
+        "key": "ctrl+shift+d",
+        "mac": "cmd+shift+d",
+        "when": "editorTextFocus && editorHasSelection && editorLangId == php"
+      },
+      {
+        "command": "mireru.showUsages",
+        "key": "ctrl+shift+u",
+        "mac": "cmd+shift+u",
+        "when": "editorTextFocus && editorHasSelection && editorLangId == php"
+      },
+      {
+        "command": "mireru.showRoutes",
+        "key": "ctrl+shift+r",
+        "mac": "cmd+shift+r",
+        "when": "editorLangId == php"
+      }
+    ],
     "configuration": {
       "title": "Mireru",
       "properties": {
@@ -127,13 +153,39 @@
         },
         "mireru.openai.model": {
           "type": "string",
-          "default": "gpt-4-turbo",
+          "default": "gpt-4o",
           "enum": [
-            "gpt-4-turbo",
+            "gpt-4o",
+            "gpt-4o-mini",
+            "gpt-4-turbo-preview",
             "gpt-4",
             "gpt-3.5-turbo"
           ],
           "description": "使用するOpenAIモデル"
+        },
+        "mireru.gemini.apiKey": {
+          "type": "string",
+          "default": "",
+          "description": "Google Gemini API キー"
+        },
+        "mireru.gemini.model": {
+          "type": "string",
+          "default": "gemini-1.5-pro",
+          "enum": [
+            "gemini-1.5-pro",
+            "gemini-1.5-flash",
+            "gemini-pro"
+          ],
+          "description": "使用するGeminiモデル"
+        },
+        "mireru.language": {
+          "type": "string",
+          "default": "ja",
+          "enum": [
+            "ja",
+            "en"
+          ],
+          "description": "説明文の言語"
         },
         "mireru.colorization.enabled": {
           "type": "boolean",

@@ -4,18 +4,17 @@
  */
 
 import * as vscode from 'vscode';
-import { ClaudeService } from './services/ClaudeService';
+import { AIServiceManager } from './ai/AIServiceManager';
 import { PhpParser } from './parser/PhpParser';
 import { LaravelAnalyzer } from './laravel/LaravelAnalyzer';
 import { DefinitionFinder } from './services/DefinitionFinder';
 import { UsageFinder } from './services/UsageFinder';
-import { AIConfig } from './types/claude';
 import { FunctionDetector } from './analyzer/FunctionDetector';
 import { FunctionClassifier } from './analyzer/FunctionClassifier';
 import { DecorationStyles } from './decoration/DecorationStyles';
 import { FunctionDecorator } from './decoration/FunctionDecorator';
 
-let claudeService: ClaudeService;
+let aiService: AIServiceManager;
 let _phpParser: PhpParser;
 let laravelAnalyzer: LaravelAnalyzer;
 let definitionFinder: DefinitionFinder;
@@ -32,7 +31,7 @@ export function activate(context: vscode.ExtensionContext) {
   console.log('Mireru extension is now active!');
 
   // サービスの初期化
-  claudeService = new ClaudeService();
+  aiService = new AIServiceManager();
   _phpParser = new PhpParser();
   laravelAnalyzer = new LaravelAnalyzer();
   definitionFinder = new DefinitionFinder();
@@ -144,31 +143,8 @@ export function deactivate() {
  * API設定を初期化
  */
 function initializeAPIConfig() {
-  const config = vscode.workspace.getConfiguration('mireru');
-  const provider = config.get<string>('apiProvider', 'claude');
-
-  const apiConfig: AIConfig = {
-    provider: provider as any,
-    apiKey: '',
-    model: '',
-    timeout: 30000,
-    maxTokens: 4000,
-    temperature: 0.7
-  };
-
-  if (provider === 'claude') {
-    apiConfig.apiKey = config.get<string>('claude.apiKey', '');
-    apiConfig.model = config.get<string>('claude.model', 'claude-sonnet-4-5-20250929');
-  } else if (provider === 'openai') {
-    apiConfig.apiKey = config.get<string>('openai.apiKey', '');
-    apiConfig.model = config.get<string>('openai.model', 'gpt-4-turbo');
-  }
-
-  if (apiConfig.apiKey) {
-    claudeService.initialize(apiConfig);
-  } else {
-    console.warn('API key not configured');
-  }
+  // AIServiceManagerが自動的に設定を読み込むため、再読み込みのみ実行
+  aiService.reloadConfiguration();
 }
 
 /**
@@ -242,7 +218,7 @@ async function handleExplainCommand() {
     return;
   }
 
-  if (!claudeService.isConfigured()) {
+  if (!aiService.isConfigured()) {
     const result = await vscode.window.showErrorMessage(
       'Mireru: API キーが設定されていません',
       '設定を開く'
@@ -270,11 +246,15 @@ async function handleExplainCommand() {
       },
       async () => {
         const context = await buildCodeContext(editor, selection, selectedText);
-        const explanation = await claudeService.explain(
-          selectedText,
-          context.codeType,
-          context
-        );
+        const config = vscode.workspace.getConfiguration('mireru');
+        const language = config.get<string>('language', 'ja') as 'ja' | 'en';
+
+        const explanation = await aiService.explainCode({
+          code: selectedText,
+          codeType: context.codeType,
+          context,
+          language
+        });
 
         // 説明を表示
         await showExplanation(explanation);
@@ -295,7 +275,7 @@ async function handleExplainWithDefinitionCommand() {
     return;
   }
 
-  if (!claudeService.isConfigured()) {
+  if (!aiService.isConfigured()) {
     const result = await vscode.window.showErrorMessage(
       'Mireru: API キーが設定されていません',
       '設定を開く'
@@ -351,11 +331,15 @@ async function handleExplainWithDefinitionCommand() {
         }
 
         // AI説明を取得
-        const explanation = await claudeService.explain(
-          selectedText,
-          context.codeType,
-          context
-        );
+        const config = vscode.workspace.getConfiguration('mireru');
+        const language = config.get<string>('language', 'ja') as 'ja' | 'en';
+
+        const explanation = await aiService.explainCode({
+          code: selectedText,
+          codeType: context.codeType,
+          context,
+          language
+        });
 
         // 定義と説明を表示
         await showDefinitionAndExplanation(definition, explanation, selectedText);
@@ -413,7 +397,7 @@ async function handleShowUsagesCommand() {
 
         // AI分析が必要な場合
         let aiInsights = null;
-        if (claudeService.isConfigured() && analysis.totalUsages > 0) {
+        if (aiService.isConfigured() && analysis.totalUsages > 0) {
           progress.report({ message: 'AI が使用パターンを分析中...' });
           aiInsights = await analyzeUsagePatterns(selectedText, analysis);
         }
@@ -792,16 +776,12 @@ JSON形式で返してください:
 }
 `;
 
-    // Claude APIを呼び出し（簡易版）
-    // 実際のAPIコールは ClaudeService を通して行う
-    const response = {
-      mainPurpose: `${identifier} は主に ${analysis.usagePatterns[0]?.pattern || '不明な用途'} で使用されています`,
-      characteristics: analysis.usagePatterns.map((p: any) => p.description),
-      bestPractices: ['適切なエラーハンドリング', '型安全性の確保'],
-      improvements: analysis.totalUsages > 100 ? ['使用箇所が多いため、リファクタリングを検討'] : []
-    };
-
-    return response;
+    // AIServiceを使って分析
+    return await aiService.analyzeUsages(identifier, {
+      totalUsages: analysis.totalUsages,
+      usagePatterns: analysis.usagePatterns,
+      sampleUsages: context.sampleUsages
+    });
   } catch (error) {
     console.error('Error analyzing usage patterns:', error);
     return null;
