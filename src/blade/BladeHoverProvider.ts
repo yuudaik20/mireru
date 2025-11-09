@@ -21,8 +21,12 @@ export class BladeHoverProvider implements vscode.HoverProvider {
     position: vscode.Position,
     token: vscode.CancellationToken
   ): Promise<vscode.Hover | null> {
-    // カーソル位置の単語を取得（より広範なパターン）
-    const wordRange = document.getWordRangeAtPosition(position, /\$[\w>-]+|[\w]+/);
+    // より広範なパターンで変数・関数を検出
+    // $variable, $obj->prop, $array['key'], function_name() など
+    const wordRange = document.getWordRangeAtPosition(
+      position,
+      /\$[a-zA-Z_][a-zA-Z0-9_]*(?:->[a-zA-Z_][a-zA-Z0-9_]*|\[[^\]]+\])*|[a-zA-Z_][a-zA-Z0-9_]*\s*\(/
+    );
 
     if (!wordRange) {
       return null;
@@ -30,19 +34,49 @@ export class BladeHoverProvider implements vscode.HoverProvider {
 
     const word = document.getText(wordRange);
 
-    // $で始まる変数、Blade式内、またはPHPタグ内のみ対象
+    // コンテキストを判定
     const inBlade = this.isInBladeExpression(document, position);
     const inPhpTag = this.isInPhpTag(document, position);
+    const inBladeDirective = this.isInBladeDirective(document, position);
 
-    if (!word.startsWith('$') && !inBlade && !inPhpTag) {
+    // 変数（$で始まる）または関数呼び出し、またはBlade/PHPコンテキスト内のみ対象
+    const isVariable = word.startsWith('$');
+    const isFunction = word.includes('(');
+    const inValidContext = inBlade || inPhpTag || inBladeDirective;
+
+    if (!isVariable && !isFunction && !inValidContext) {
       return null;
     }
 
-    // Blade式またはPHP式全体を取得
-    let fullExpression = this.getFullBladeExpression(document, position);
+    // 式全体を取得（優先順位付き）
+    let fullExpression = null;
+    let expressionRange = null;
 
+    // 1. Blade式から取得を試みる
+    if (inBlade) {
+      const bladeExpr = this.getFullBladeExpression(document, position);
+      if (bladeExpr) {
+        fullExpression = bladeExpr.expression;
+        expressionRange = bladeExpr.range;
+      }
+    }
+
+    // 2. PHPタグ内から取得を試みる
     if (!fullExpression && inPhpTag) {
-      fullExpression = this.getFullPhpExpression(document, position);
+      const phpExpr = this.getFullPhpExpression(document, position);
+      if (phpExpr) {
+        fullExpression = phpExpr.expression;
+        expressionRange = phpExpr.range;
+      }
+    }
+
+    // 3. Bladeディレクティブ内から取得を試みる
+    if (!fullExpression && inBladeDirective) {
+      const directiveExpr = this.getBladeDirectiveExpression(document, position);
+      if (directiveExpr) {
+        fullExpression = directiveExpr.expression;
+        expressionRange = directiveExpr.range;
+      }
     }
 
     if (!fullExpression) {
@@ -93,67 +127,219 @@ export class BladeHoverProvider implements vscode.HoverProvider {
       markdown.appendMarkdown(`💡 *右クリック → 「Mireru: 説明を表示」でAIによる詳細な説明を取得できます*`);
     }
 
-    return new vscode.Hover(markdown, wordRange);
+    return new vscode.Hover(markdown, expressionRange || wordRange);
   }
 
   /**
-   * PHPタグの中にいるかチェック
+   * Bladeディレクティブの中にいるかチェック
+   * @if, @foreach, @while などの () 内にいるかチェック
    */
-  private isInPhpTag(document: vscode.TextDocument, position: vscode.Position): boolean {
+  private isInBladeDirective(document: vscode.TextDocument, position: vscode.Position): boolean {
     const line = document.lineAt(position.line).text;
     const charPos = position.character;
 
-    // <?php ?> の中にいるかチェック
-    let inPhp = false;
+    // @directive(...) のパターンを探す
+    const directivePattern = /@(if|elseif|unless|foreach|for|while|switch|isset|empty|auth|guest)\s*\(/g;
+    let match;
 
-    for (let i = 0; i < charPos; i++) {
-      if (line.substring(i, i + 5) === '<?php' || line.substring(i, i + 2) === '<?') {
-        inPhp = true;
-      } else if (line.substring(i, i + 2) === '?>') {
-        inPhp = false;
+    while ((match = directivePattern.exec(line)) !== null) {
+      const openParenPos = line.indexOf('(', match.index);
+      if (openParenPos === -1) {continue;}
+
+      // 対応する閉じ括弧を探す
+      let depth = 1;
+      let closeParenPos = openParenPos + 1;
+
+      while (closeParenPos < line.length && depth > 0) {
+        if (line[closeParenPos] === '(') {
+          depth++;
+        } else if (line[closeParenPos] === ')') {
+          depth--;
+        }
+        closeParenPos++;
+      }
+
+      // カーソルが () の中にいるかチェック
+      if (charPos > openParenPos && charPos < closeParenPos) {
+        return true;
       }
     }
 
-    return inPhp;
+    return false;
   }
 
   /**
-   * PHP式全体を取得
-   * 例: <?php echo $row->category->name; ?> から $row->category->name を取得
+   * Bladeディレクティブ内の式を取得
+   */
+  private getBladeDirectiveExpression(
+    document: vscode.TextDocument,
+    position: vscode.Position
+  ): { expression: string; range: vscode.Range } | null {
+    const line = document.lineAt(position.line).text;
+    const charPos = position.character;
+
+    // @directive(...) のパターンを探す
+    const directivePattern = /@(if|elseif|unless|foreach|for|while|switch|isset|empty|auth|guest)\s*\(/g;
+    let match;
+
+    while ((match = directivePattern.exec(line)) !== null) {
+      const openParenPos = line.indexOf('(', match.index);
+      if (openParenPos === -1) {continue;}
+
+      // 対応する閉じ括弧を探す
+      let depth = 1;
+      let closeParenPos = openParenPos + 1;
+
+      while (closeParenPos < line.length && depth > 0) {
+        if (line[closeParenPos] === '(') {
+          depth++;
+        } else if (line[closeParenPos] === ')') {
+          depth--;
+        }
+        closeParenPos++;
+      }
+
+      // カーソルが () の中にいる場合、その内容を返す
+      if (charPos > openParenPos && charPos < closeParenPos) {
+        const expression = line.substring(openParenPos + 1, closeParenPos - 1).trim();
+        const range = new vscode.Range(
+          position.line,
+          openParenPos + 1,
+          position.line,
+          closeParenPos - 1
+        );
+        return { expression, range };
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * PHPタグの中にいるかチェック（複数行対応）
+   */
+  private isInPhpTag(document: vscode.TextDocument, position: vscode.Position): boolean {
+    // 現在行から前方にスキャンして最も近いPHPタグを探す
+    let inPhp = false;
+
+    for (let lineNum = position.line; lineNum >= Math.max(0, position.line - 50); lineNum--) {
+      const line = document.lineAt(lineNum).text;
+      const endChar = lineNum === position.line ? position.character : line.length;
+
+      // 現在行の場合はカーソル位置まで、それ以外は行末までチェック
+      for (let i = endChar - 1; i >= 0; i--) {
+        if (line.substring(i, i + 2) === '?>') {
+          return false; // 閉じタグが見つかった = PHP外
+        }
+        if (line.substring(i, i + 5) === '<?php' ||
+            (line.substring(i, i + 2) === '<?' && line[i + 2] !== '?')) {
+          return true; // 開始タグが見つかった = PHP内
+        }
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * PHP式全体を取得（改善版）
+   * 変数チェーン、関数呼び出し、配列アクセスなどを正確に抽出
    */
   private getFullPhpExpression(
     document: vscode.TextDocument,
     position: vscode.Position
-  ): string | null {
+  ): { expression: string; range: vscode.Range } | null {
     const line = document.lineAt(position.line).text;
     const charPos = position.character;
 
-    // $から始まる変数チェーンを抽出
+    // まず、カーソル位置の文字を確認
     let startPos = charPos;
 
-    // $の位置まで戻る
-    while (startPos > 0 && line[startPos] !== '$') {
-      startPos--;
-    }
-
-    if (line[startPos] !== '$') {
-      return null;
-    }
-
-    // 変数チェーンの終わりを探す
-    let endPos = startPos + 1;
-    while (endPos < line.length) {
-      const char = line[endPos];
-      // 変数名、->、[]、:: などが続く限り
-      if (/[a-zA-Z0-9_]/.test(char) || char === '-' || char === '>' || char === '[' || char === ']' || char === ':') {
-        endPos++;
+    // $または関数名の開始位置まで戻る
+    while (startPos > 0) {
+      const char = line[startPos - 1];
+      if (char === '$') {
+        startPos--;
+        break;
+      } else if (/[a-zA-Z_]/.test(char)) {
+        startPos--;
+      } else if (char === ' ' || char === '\t') {
+        // スペースの後に文字がある場合は、それが関数名の可能性
+        break;
       } else {
         break;
       }
     }
 
-    const expression = line.substring(startPos, endPos);
-    return expression || null;
+    // 式の終わりを探す（より正確に）
+    let endPos = charPos;
+    let depth = 0; // 括弧のネスト深度
+    let inString = false;
+    let stringChar = '';
+
+    while (endPos < line.length) {
+      const char = line[endPos];
+
+      // 文字列の開始/終了を追跡
+      if ((char === '"' || char === "'") && (endPos === 0 || line[endPos - 1] !== '\\')) {
+        if (!inString) {
+          inString = true;
+          stringChar = char;
+        } else if (char === stringChar) {
+          inString = false;
+          stringChar = '';
+        }
+      }
+
+      if (!inString) {
+        // 括弧の深度を追跡
+        if (char === '(' || char === '[' || char === '{') {
+          depth++;
+        } else if (char === ')' || char === ']' || char === '}') {
+          if (depth > 0) {
+            depth--;
+          } else {
+            break; // 括弧が閉じられたら終了
+          }
+        }
+
+        // 変数名、プロパティアクセス、配列アクセス、関数呼び出しの一部
+        if (/[a-zA-Z0-9_]/.test(char) ||
+            char === '$' || char === '-' || char === '>' ||
+            char === '(' || char === ')' ||
+            char === '[' || char === ']' ||
+            char === ':' || char === '\\' || char === ' ') {
+          endPos++;
+        } else if (depth > 0) {
+          // 括弧内であれば、ほとんどの文字を許可
+          endPos++;
+        } else {
+          break;
+        }
+      } else {
+        endPos++;
+      }
+    }
+
+    if (startPos >= endPos) {
+      return null;
+    }
+
+    const expression = line.substring(startPos, endPos).trim();
+
+    // 有効な式かチェック（$で始まるか、識別子を含む）
+    if (!expression || (!expression.includes('$') && !expression.match(/[a-zA-Z_]/))) {
+      return null;
+    }
+
+    const range = new vscode.Range(
+      position.line,
+      startPos,
+      position.line,
+      endPos
+    );
+
+    return { expression, range };
   }
 
   /**
@@ -185,67 +371,65 @@ export class BladeHoverProvider implements vscode.HoverProvider {
   }
 
   /**
-   * Blade式全体を取得
-   * 例: {{ $row->category->name }} 全体を取得
+   * Blade式全体を取得（改善版）
+   * {{ }}, {!! !!}, {{{ }}} などに対応
    */
   private getFullBladeExpression(
     document: vscode.TextDocument,
     position: vscode.Position
-  ): string | null {
+  ): { expression: string; range: vscode.Range } | null {
     const line = document.lineAt(position.line).text;
     const charPos = position.character;
 
-    // {{ の位置を探す
-    let startPos = charPos;
-    while (startPos > 0) {
-      if (line[startPos] === '{' && line[startPos + 1] === '{') {
-        break;
+    // 複数のBladeパターンをチェック
+    const patterns = [
+      { open: '{{', close: '}}', offset: 2 },
+      { open: '{!!', close: '!!}', offset: 3 },
+      { open: '{{{', close: '}}}', offset: 3 }
+    ];
+
+    for (const pattern of patterns) {
+      // 開始タグの位置を探す
+      let startPos = charPos;
+      while (startPos >= 0) {
+        if (line.substring(startPos, startPos + pattern.offset) === pattern.open) {
+          break;
+        }
+        startPos--;
       }
-      startPos--;
-    }
 
-    // }} の位置を探す
-    let endPos = charPos;
-    while (endPos < line.length - 1) {
-      if (line[endPos] === '}' && line[endPos + 1] === '}') {
-        endPos += 2;
-        break;
+      if (startPos < 0) {
+        continue;
       }
-      endPos++;
-    }
 
-    if (startPos >= 0 && endPos > startPos) {
-      const expression = line.substring(startPos, endPos);
-
-      // {{ }} があるか確認
-      if (expression.includes('{{') && expression.includes('}}')) {
-        return expression;
+      // 終了タグの位置を探す
+      let endPos = charPos;
+      while (endPos < line.length) {
+        if (line.substring(endPos, endPos + pattern.offset) === pattern.close) {
+          endPos += pattern.offset;
+          break;
+        }
+        endPos++;
       }
-    }
 
-    // {!! !!} も対応
-    startPos = charPos;
-    while (startPos > 0) {
-      if (line[startPos] === '{' && line[startPos + 1] === '!' && line[startPos + 2] === '!') {
-        break;
-      }
-      startPos--;
-    }
+      // カーソルが開始タグと終了タグの間にある場合
+      if (startPos <= charPos && charPos <= endPos) {
+        // タグ内の式を抽出（タグ自体は除く）
+        const innerExpression = line.substring(
+          startPos + pattern.offset,
+          endPos - pattern.offset
+        ).trim();
 
-    endPos = charPos;
-    while (endPos < line.length - 2) {
-      if (line[endPos] === '!' && line[endPos + 1] === '!' && line[endPos + 2] === '}') {
-        endPos += 3;
-        break;
-      }
-      endPos++;
-    }
+        if (innerExpression) {
+          const range = new vscode.Range(
+            position.line,
+            startPos + pattern.offset,
+            position.line,
+            endPos - pattern.offset
+          );
 
-    if (startPos >= 0 && endPos > startPos) {
-      const expression = line.substring(startPos, endPos);
-
-      if (expression.includes('{!!') && expression.includes('!!}')) {
-        return expression;
+          return { expression: innerExpression, range };
+        }
       }
     }
 
