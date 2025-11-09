@@ -138,12 +138,15 @@ ${context.afterCode}
 【分析してほしい内容】
 1. **全体の役割**: このコードブロックが何を実行しているか
 2. **行ごとの解説**: コードを上から順に、1行ずつ何が起きているかを説明（空行やコメント行は除く）
-3. **処理の流れ**: ステップバイステップでの処理フロー
-4. **変数の説明**: 各変数が何を表し、どのように使われているか
-5. **関数の説明**: 呼び出されている関数・メソッドの役割
-6. **変数と関数の連携**: データがどのように流れ、変換されているか
-7. **Laravelの機能**: 使用されているLaravel固有の機能やパターン
-8. **注意点**: 理解すべきポイントや改善の余地
+3. **パラメータ**: 関数/メソッドのパラメータの説明（関数定義の場合）
+4. **返り値**: 関数/メソッドの返り値の型と説明
+5. **処理の流れ**: ステップバイステップでの処理フロー
+6. **変数の説明**: 各変数が何を表し、どのように使われているか
+7. **関数の説明**: 呼び出されている関数・メソッドの役割
+8. **変数と関数の連携**: データがどのように流れ、変換されているか
+9. **Laravelの機能**: 使用されているLaravel固有の機能やパターン
+10. **使用例**: このコードの実際の使用例
+11. **注意点**: 理解すべきポイントや改善の余地、よくある間違い
 
 【出力形式】
 JSON形式で以下の構造で返してください:
@@ -151,6 +154,18 @@ JSON形式で以下の構造で返してください:
 {
   "summary": "コードブロック全体の要約（1-2文）",
   "purpose": "このコードの役割・目的の詳細説明",
+  "parameters": [
+    {
+      "name": "パラメータ名",
+      "type": "型",
+      "description": "説明",
+      "required": true
+    }
+  ],
+  "returnValue": {
+    "type": "返り値の型",
+    "description": "返り値の説明"
+  },
   "lineByLineExplanation": [
     {
       "lineNumber": 1,
@@ -188,6 +203,17 @@ JSON形式で以下の構造で返してください:
       "description": "説明"
     }
   ],
+  "usageExamples": [
+    {
+      "title": "使用例のタイトル",
+      "code": "サンプルコード",
+      "description": "説明"
+    }
+  ],
+  "warnings": [
+    "注意点1",
+    "注意点2"
+  ],
   "insights": [
     "理解すべきポイント1",
     "理解すべきポイント2"
@@ -211,12 +237,16 @@ JSON形式で以下の構造で返してください:
       return {
         summary: parsed.summary || '',
         purpose: parsed.purpose || '',
+        parameters: parsed.parameters || [],
+        returnValue: parsed.returnValue,
         lineByLineExplanation: parsed.lineByLineExplanation || [],
         flow: parsed.flow || [],
         variables: parsed.variables || [],
         functions: parsed.functions || [],
         dataFlow: parsed.dataFlow || '',
         laravelFeatures: parsed.laravelFeatures || [],
+        usageExamples: parsed.usageExamples || [],
+        warnings: parsed.warnings || [],
         insights: parsed.insights || []
       };
     } catch (error) {
@@ -224,12 +254,16 @@ JSON形式で以下の構造で返してください:
       return {
         summary: response.substring(0, 200),
         purpose: response,
+        parameters: [],
+        returnValue: undefined,
         lineByLineExplanation: [],
         flow: [],
         variables: [],
         functions: [],
         dataFlow: '',
         laravelFeatures: [],
+        usageExamples: [],
+        warnings: [],
         insights: []
       };
     }
@@ -377,6 +411,34 @@ JSON形式で以下の構造で返してください:
     <p>${this.escapeHtml(analysis.purpose)}</p>
   </div>
 
+  ${analysis.parameters.length > 0 ? `
+  <div class="section">
+    <h2>📋 パラメータ</h2>
+    ${analysis.parameters.map(param => `
+      <div class="variable">
+        <div>
+          <span class="variable-name">${this.escapeHtml(param.name)}</span>
+          <span class="type-badge">${this.escapeHtml(param.type)}</span>
+          ${param.required ? '<span class="type-badge" style="background: #e74c3c;">必須</span>' : '<span class="type-badge" style="background: #95a5a6;">任意</span>'}
+        </div>
+        <p>${this.escapeHtml(param.description)}</p>
+      </div>
+    `).join('')}
+  </div>
+  ` : ''}
+
+  ${analysis.returnValue ? `
+  <div class="section">
+    <h2>↩️ 返り値</h2>
+    <div class="variable">
+      <div>
+        <span class="type-badge">${this.escapeHtml(analysis.returnValue.type)}</span>
+      </div>
+      <p>${this.escapeHtml(analysis.returnValue.description)}</p>
+    </div>
+  </div>
+  ` : ''}
+
   ${analysis.lineByLineExplanation.length > 0 ? `
   <div class="section">
     <h2>📖 解説</h2>
@@ -456,6 +518,30 @@ JSON形式で以下の構造で返してください:
   </div>
   ` : ''}
 
+  ${analysis.usageExamples.length > 0 ? `
+  <div class="section">
+    <h2>💻 使用例</h2>
+    ${analysis.usageExamples.map(example => `
+      <div class="variable">
+        <h3>${this.escapeHtml(example.title)}</h3>
+        <pre style="background: var(--vscode-textCodeBlock-background); padding: 10px; border-radius: 5px; overflow-x: auto;"><code>${this.escapeHtml(example.code)}</code></pre>
+        <p>${this.escapeHtml(example.description)}</p>
+      </div>
+    `).join('')}
+  </div>
+  ` : ''}
+
+  ${analysis.warnings.length > 0 ? `
+  <div class="section">
+    <h2>⚠️ 注意点</h2>
+    ${analysis.warnings.map(warning => `
+      <div class="insight" style="border-left-color: var(--vscode-notificationsErrorIcon-foreground);">
+        ${this.escapeHtml(warning)}
+      </div>
+    `).join('')}
+  </div>
+  ` : ''}
+
   ${analysis.insights.length > 0 ? `
   <div class="section">
     <h2>💡 理解すべきポイント</h2>
@@ -499,19 +585,41 @@ interface CodeContext {
 interface CodeFlowAnalysis {
   summary: string;
   purpose: string;
+  parameters: ParameterInfo[];
+  returnValue?: ReturnValueInfo;
   lineByLineExplanation: LineExplanation[];
   flow: FlowStep[];
   variables: VariableInfo[];
   functions: FunctionInfo[];
   dataFlow: string;
   laravelFeatures: LaravelFeature[];
+  usageExamples: UsageExample[];
+  warnings: string[];
   insights: string[];
+}
+
+interface ParameterInfo {
+  name: string;
+  type: string;
+  description: string;
+  required?: boolean;
+}
+
+interface ReturnValueInfo {
+  type: string;
+  description: string;
 }
 
 interface LineExplanation {
   lineNumber: number;
   code: string;
   explanation: string;
+}
+
+interface UsageExample {
+  title: string;
+  code: string;
+  description: string;
 }
 
 interface FlowStep {
