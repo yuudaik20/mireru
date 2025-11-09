@@ -138,6 +138,23 @@ export class AIServiceManager {
   }
 
   /**
+   * 汎用的なテキスト生成
+   */
+  async generate(prompt: string, options?: { maxTokens?: number; temperature?: number }): Promise<string> {
+    const provider = this.getCurrentProvider();
+    if (!provider.isConfigured()) {
+      throw new Error(`${provider.name} API key not configured`);
+    }
+    const request: any = {
+      prompt,
+      maxTokens: options?.maxTokens || 2000,
+      temperature: options?.temperature || 0.3
+    };
+    const response = await provider.generate(request);
+    return response.content;
+  }
+
+  /**
    * 利用可能なプロバイダー一覧を取得
    */
   getAvailableProviders(): Array<{ name: string; type: AIProvider; configured: boolean }> {

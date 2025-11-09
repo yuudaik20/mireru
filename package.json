@@ -2,7 +2,7 @@
   "name": "mireru",
   "displayName": "Mireru - AI Code Intelligence",
   "description": "AI駆動のPHP/Laravelコードインテリジェンス拡張機能。コードの構造を「見える化」",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "publisher": "mireru",
   "engines": {
     "vscode": "^1.85.0"
@@ -28,6 +28,7 @@
     "onCommand:mireru.explain",
     "onCommand:mireru.explainWithDefinition",
     "onCommand:mireru.showUsages",
+    "onCommand:mireru.analyzeCodeFlow",
     "onCommand:mireru.showProjectMap",
     "onCommand:mireru.showDependencyGraph",
     "onCommand:mireru.trackVariable",
@@ -48,6 +49,10 @@
       {
         "command": "mireru.showUsages",
         "title": "Mireru: 使用箇所と使用方法を表示"
+      },
+      {
+        "command": "mireru.analyzeCodeFlow",
+        "title": "Mireru: コードフローを分析"
       },
       {
         "command": "mireru.showProjectMap",
@@ -88,9 +93,14 @@
           "group": "mireru@3"
         },
         {
-          "command": "mireru.trackVariable",
+          "command": "mireru.analyzeCodeFlow",
           "when": "editorHasSelection && editorLangId == php",
           "group": "mireru@4"
+        },
+        {
+          "command": "mireru.trackVariable",
+          "when": "editorHasSelection && editorLangId == php",
+          "group": "mireru@5"
         }
       ]
     },
@@ -111,6 +121,12 @@
         "command": "mireru.showUsages",
         "key": "ctrl+shift+u",
         "mac": "cmd+shift+u",
+        "when": "editorTextFocus && editorHasSelection && editorLangId == php"
+      },
+      {
+        "command": "mireru.analyzeCodeFlow",
+        "key": "ctrl+shift+f",
+        "mac": "cmd+shift+f",
         "when": "editorTextFocus && editorHasSelection && editorLangId == php"
       },
       {

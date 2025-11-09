@@ -14,6 +14,7 @@ import { FunctionClassifier } from './analyzer/FunctionClassifier';
 import { DecorationStyles } from './decoration/DecorationStyles';
 import { FunctionDecorator } from './decoration/FunctionDecorator';
 import { BladeHoverProvider } from './blade/BladeHoverProvider';
+import { AnalyzeCodeFlowCommand } from './commands/AnalyzeCodeFlowCommand';
 
 let aiService: AIServiceManager;
 let _phpParser: PhpParser;
@@ -207,6 +208,14 @@ function registerCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand('mireru.showRoutes', async () => {
       await handleShowRoutesCommand();
+    })
+  );
+
+  // コードフロー分析
+  const analyzeCodeFlowCommand = new AnalyzeCodeFlowCommand(aiService);
+  context.subscriptions.push(
+    vscode.commands.registerCommand('mireru.analyzeCodeFlow', async () => {
+      await analyzeCodeFlowCommand.execute();
     })
   );
 

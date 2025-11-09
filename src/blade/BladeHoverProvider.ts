@@ -21,7 +21,7 @@ export class BladeHoverProvider implements vscode.HoverProvider {
     position: vscode.Position,
     token: vscode.CancellationToken
   ): Promise<vscode.Hover | null> {
-    // カーソル位置の単語を取得
+    // カーソル位置の単語を取得（より広範なパターン）
     const wordRange = document.getWordRangeAtPosition(position, /\$[\w>-]+|[\w]+/);
 
     if (!wordRange) {
@@ -30,13 +30,20 @@ export class BladeHoverProvider implements vscode.HoverProvider {
 
     const word = document.getText(wordRange);
 
-    // $で始まる変数またはプロパティ名のみ対象
-    if (!word.startsWith('$') && !this.isInBladeExpression(document, position)) {
+    // $で始まる変数、Blade式内、またはPHPタグ内のみ対象
+    const inBlade = this.isInBladeExpression(document, position);
+    const inPhpTag = this.isInPhpTag(document, position);
+
+    if (!word.startsWith('$') && !inBlade && !inPhpTag) {
       return null;
     }
 
-    // Blade式全体を取得
-    const fullExpression = this.getFullBladeExpression(document, position);
+    // Blade式またはPHP式全体を取得
+    let fullExpression = this.getFullBladeExpression(document, position);
+
+    if (!fullExpression && inPhpTag) {
+      fullExpression = this.getFullPhpExpression(document, position);
+    }
 
     if (!fullExpression) {
       return null;
@@ -87,6 +94,66 @@ export class BladeHoverProvider implements vscode.HoverProvider {
     }
 
     return new vscode.Hover(markdown, wordRange);
+  }
+
+  /**
+   * PHPタグの中にいるかチェック
+   */
+  private isInPhpTag(document: vscode.TextDocument, position: vscode.Position): boolean {
+    const line = document.lineAt(position.line).text;
+    const charPos = position.character;
+
+    // <?php ?> の中にいるかチェック
+    let inPhp = false;
+
+    for (let i = 0; i < charPos; i++) {
+      if (line.substring(i, i + 5) === '<?php' || line.substring(i, i + 2) === '<?') {
+        inPhp = true;
+      } else if (line.substring(i, i + 2) === '?>') {
+        inPhp = false;
+      }
+    }
+
+    return inPhp;
+  }
+
+  /**
+   * PHP式全体を取得
+   * 例: <?php echo $row->category->name; ?> から $row->category->name を取得
+   */
+  private getFullPhpExpression(
+    document: vscode.TextDocument,
+    position: vscode.Position
+  ): string | null {
+    const line = document.lineAt(position.line).text;
+    const charPos = position.character;
+
+    // $から始まる変数チェーンを抽出
+    let startPos = charPos;
+
+    // $の位置まで戻る
+    while (startPos > 0 && line[startPos] !== '$') {
+      startPos--;
+    }
+
+    if (line[startPos] !== '$') {
+      return null;
+    }
+
+    // 変数チェーンの終わりを探す
+    let endPos = startPos + 1;
+    while (endPos < line.length) {
+      const char = line[endPos];
+      // 変数名、->、[]、:: などが続く限り
+      if (/[a-zA-Z0-9_]/.test(char) || char === '-' || char === '>' || char === '[' || char === ']' || char === ':') {
+        endPos++;
+      } else {
+        break;
+      }
+    }
+
+    const expression = line.substring(startPos, endPos);
+    return expression || null;
   }
 
   /**
