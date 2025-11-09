@@ -25,12 +25,7 @@ export class AnalyzeCodeFlowCommand {
       return;
     }
 
-    // 選択範囲が1行以上かチェック
-    const lines = selectedText.split('\n').filter(line => line.trim().length > 0);
-    if (lines.length < 2) {
-      vscode.window.showInformationMessage('複数行のコードを選択してください（このコマンドは複数行のコードフロー分析用です）');
-    }
-
+    // どんなコード（1行でも複数行でも）でも分析可能
     // AI分析を実行
     await this.analyzeCodeFlow(editor.document, selectedText, selection);
   }
@@ -129,7 +124,9 @@ export class AnalyzeCodeFlowCommand {
       frameworkFeatureLabel = 'HTML/Web技術の機能';
     }
 
-    return `あなたは${expertRole}の専門家です。以下の複数行のコードブロックを分析し、${langInstruction}詳細に説明してください。
+    return `あなたは${expertRole}の専門家です。以下のコードを分析し、${langInstruction}統一フォーマットで詳細に説明してください。
+
+【重要】1行でも複数行でも、すべての項目を必ず含めて分析してください。該当しない項目は「該当なし」と明記してください。
 
 【分析対象コード】
 \`\`\`${context.language}
@@ -150,29 +147,47 @@ ${context.beforeCode}
 ${context.afterCode}
 \`\`\`
 
-【分析してほしい内容】
-1. **全体の役割**: このコードブロックが何を実行しているか
-2. **パラメータ**: 関数/メソッドのパラメータの説明（関数定義の場合）
-3. **返り値**: 関数/メソッドの返り値の型と説明
-4. **処理の流れ**: ステップバイステップでの処理フロー
-5. **変数の説明**: 各変数が何を表し、どのように使われているか
-6. **関数の説明**: 呼び出されている関数・メソッドの役割
-7. **変数と関数の連携**: データがどのように流れ、変換されているか
-8. **${frameworkFeatureLabel}**: 使用されている固有の機能やパターン
-9. **使用例**: このコードの実際の使用例
-10. **注意点**: 理解すべきポイントや改善の余地、よくある間違い
+【必須分析項目】以下のすべての項目を必ず分析してください：
+
+1. **要約（summary）**: このコードが何をしているかを1-2文で簡潔に説明
+
+2. **役割・目的（purpose）**: このコードの詳細な目的、なぜこのコードが必要か
+
+3. **パラメータ（parameters）**: 関数/メソッドの場合は各パラメータを詳細に。変数代入などの場合は空配列
+
+4. **返り値（returnValue）**: 関数/メソッドの返り値の型と意味。該当しない場合はnull
+
+5. **処理の流れ（flow）**: コードを1処理ずつ分解して説明。1行のコードでも最低1つのステップを作成
+   - 各ステップは具体的に「何をしているか」を説明
+   - 初心者にもわかるよう、専門用語は噛み砕いて説明
+
+6. **変数の説明（variables）**: 使用されているすべての変数を説明
+   - 変数名、型、説明、どのように使われているか
+
+7. **関数・メソッドの説明（functions）**: 呼び出されているすべての関数/メソッド
+   - 名前、種類（builtin/framework/userDefined/library）、説明、この処理での役割
+
+8. **データの流れ（dataFlow）**: データがどのように入力され、変換され、出力されるか
+
+9. **${frameworkFeatureLabel}（laravelFeatures）**: 使用されているフレームワーク固有の機能やパターン
+
+10. **使用例（usageExamples）**: このコードの実際の使用例を1つ以上提示
+
+11. **注意点（warnings）**: 理解すべき注意点、よくある間違い、改善の余地
+
+12. **理解すべきポイント（insights）**: このコードから学べる重要な概念やベストプラクティス
 
 【出力形式】
-JSON形式で以下の構造で返してください:
+JSON形式で以下の構造で返してください。すべてのフィールドは必須です：
 \`\`\`json
 {
-  "summary": "コードブロック全体の要約（1-2文）",
-  "purpose": "このコードの役割・目的の詳細説明",
+  "summary": "コードの要約（1-2文で簡潔に）【必須】",
+  "purpose": "このコードの役割・目的の詳細説明【必須】",
   "parameters": [
     {
       "name": "パラメータ名",
       "type": "型",
-      "description": "説明",
+      "description": "詳細説明",
       "required": true
     }
   ],
@@ -183,7 +198,12 @@ JSON形式で以下の構造で返してください:
   "flow": [
     {
       "step": 1,
-      "description": "ステップの説明",
+      "description": "1つ目の処理の説明（初心者にもわかりやすく）",
+      "code": "該当するコード行"
+    },
+    {
+      "step": 2,
+      "description": "2つ目の処理の説明",
       "code": "該当するコード行"
     }
   ],
@@ -191,7 +211,7 @@ JSON形式で以下の構造で返してください:
     {
       "name": "変数名",
       "type": "型",
-      "description": "説明",
+      "description": "変数の説明",
       "usage": "どのように使われているか"
     }
   ],
@@ -199,34 +219,40 @@ JSON形式で以下の構造で返してください:
     {
       "name": "関数・メソッド名",
       "type": "builtin|framework|userDefined|library",
-      "description": "説明",
+      "description": "関数の説明",
       "purpose": "この処理での役割"
     }
   ],
-  "dataFlow": "データがどのように流れ、変換されているかの説明",
+  "dataFlow": "データがどのように入力され、変換され、出力されるかの流れを詳細に説明【必須】",
   "laravelFeatures": [
     {
-      "feature": "機能名",
-      "description": "説明"
+      "feature": "機能名（例: Eloquent ORM、Blade、ルーティング）",
+      "description": "機能の説明と使用方法"
     }
   ],
   "usageExamples": [
     {
-      "title": "使用例のタイトル",
-      "code": "サンプルコード",
-      "description": "説明"
+      "title": "使用例1のタイトル",
+      "code": "実際に動作するサンプルコード",
+      "description": "使用例の説明"
     }
   ],
   "warnings": [
-    "注意点1",
-    "注意点2"
+    "注意点1: 具体的な警告や改善点",
+    "注意点2: よくある間違いと対処法"
   ],
   "insights": [
-    "理解すべきポイント1",
-    "理解すべきポイント2"
+    "理解すべきポイント1: このコードから学べる重要な概念",
+    "理解すべきポイント2: ベストプラクティスや設計パターン"
   ]
 }
-\`\`\``;
+\`\`\`
+
+【重要な注意事項】
+- 配列フィールド（parameters, flow, variables, functions, laravelFeatures, usageExamples, warnings, insights）は、該当がない場合でも空配列[]を返してください
+- returnValueは該当しない場合はnullを返してください
+- すべての説明は具体的で詳細に、初心者にもわかりやすく記述してください
+- 1行のコードでもflowは最低1つのステップを作成してください`;
   }
 
   private parseAnalysisResponse(response: string): CodeFlowAnalysis {
