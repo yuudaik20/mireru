@@ -566,153 +566,263 @@ function guessCodeType(code: string): any {
 }
 
 /**
- * 説明を表示
+ * 説明を表示（Webview版）
  */
 async function showExplanation(explanation: any) {
-  // マークダウン形式で表示
-  let content = `# ${explanation.title}\n\n`;
-  content += `**種別**: ${explanation.functionType}\n\n`;
-  content += `## 説明\n\n${explanation.description}\n\n`;
+  const panel = vscode.window.createWebviewPanel(
+    'mireruExplanation',
+    '説明',
+    vscode.ViewColumn.Two,
+    { enableScripts: true }
+  );
 
-  if (explanation.parameters && explanation.parameters.length > 0) {
-    content += `## パラメータ\n\n`;
-    for (const param of explanation.parameters) {
-      content += `- **${param.name}** (${param.type}): ${param.description}\n`;
+  const escapeHtml = (text: string): string => {
+    const div = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+    return text.replace(/[&<>"']/g, (m) => div[m as keyof typeof div]);
+  };
+
+  panel.webview.html = `<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${escapeHtml(explanation.title)}</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      padding: 20px;
+      line-height: 1.6;
+      color: var(--vscode-foreground);
+      background-color: var(--vscode-editor-background);
     }
-    content += '\n';
-  }
-
-  if (explanation.returnType) {
-    content += `## 返り値\n\n`;
-    content += `- **型**: ${explanation.returnType}\n`;
-    if (explanation.returnDescription) {
-      content += `- **説明**: ${explanation.returnDescription}\n`;
+    h1, h2 { color: var(--vscode-editor-foreground); }
+    h1 { font-size: 24px; border-bottom: 2px solid var(--vscode-panel-border); padding-bottom: 10px; }
+    h2 { font-size: 20px; margin-top: 30px; color: var(--vscode-textLink-foreground); }
+    .section {
+      margin: 20px 0;
+      padding: 15px;
+      background: var(--vscode-editor-inactiveSelectionBackground);
+      border-radius: 5px;
     }
-    content += '\n';
-  }
+    .parameter, .warning {
+      margin: 10px 0;
+      padding: 10px;
+      background: var(--vscode-editor-background);
+      border-radius: 3px;
+    }
+    code {
+      background: var(--vscode-textCodeBlock-background);
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-family: 'Courier New', monospace;
+    }
+    pre {
+      background: var(--vscode-textCodeBlock-background);
+      padding: 10px;
+      border-radius: 5px;
+      overflow-x: auto;
+    }
+  </style>
+</head>
+<body>
+  <h1>📖 ${escapeHtml(explanation.title)}</h1>
 
-  if (explanation.example) {
-    content += `## 使用例\n\n\`\`\`php\n${explanation.example}\n\`\`\`\n\n`;
-  }
+  <div class="section">
+    <p><strong>種別</strong>: ${escapeHtml(explanation.functionType || '')}</p>
+  </div>
 
-  if (explanation.warnings && explanation.warnings.length > 0) {
-    content += `## 注意点\n\n`;
-    explanation.warnings.forEach((w: string) => {
-      content += `- ${w}\n`;
-    });
-    content += '\n';
-  }
+  <div class="section">
+    <h2>説明</h2>
+    <p>${escapeHtml(explanation.description || '')}</p>
+  </div>
 
-  const document = await vscode.workspace.openTextDocument({
-    content,
-    language: 'markdown'
-  });
+  ${explanation.parameters && explanation.parameters.length > 0 ? `
+  <div class="section">
+    <h2>📋 パラメータ</h2>
+    ${explanation.parameters.map((param: any) => `
+      <div class="parameter">
+        <strong>${escapeHtml(param.name)}</strong> (<code>${escapeHtml(param.type)}</code>): ${escapeHtml(param.description)}
+      </div>
+    `).join('')}
+  </div>
+  ` : ''}
 
-  await vscode.window.showTextDocument(document, vscode.ViewColumn.Beside);
+  ${explanation.returnType ? `
+  <div class="section">
+    <h2>↩️ 返り値</h2>
+    <p><strong>型</strong>: <code>${escapeHtml(explanation.returnType)}</code></p>
+    ${explanation.returnDescription ? `<p>${escapeHtml(explanation.returnDescription)}</p>` : ''}
+  </div>
+  ` : ''}
+
+  ${explanation.example ? `
+  <div class="section">
+    <h2>💻 使用例</h2>
+    <pre><code>${escapeHtml(explanation.example)}</code></pre>
+  </div>
+  ` : ''}
+
+  ${explanation.warnings && explanation.warnings.length > 0 ? `
+  <div class="section">
+    <h2>⚠️ 注意点</h2>
+    ${explanation.warnings.map((w: string) => `
+      <div class="warning">
+        ${escapeHtml(w)}
+      </div>
+    `).join('')}
+  </div>
+  ` : ''}
+</body>
+</html>`;
 }
 
 /**
- * 定義と説明を表示
+ * 定義と説明を表示（Webview版）
  */
 async function showDefinitionAndExplanation(
   definition: any,
   explanation: any,
   identifier: string
 ) {
-  // マークダウン形式で表示
-  let content = `# ${explanation.title}\n\n`;
+  const panel = vscode.window.createWebviewPanel(
+    'mireruDefinitionExplanation',
+    '定義と説明',
+    vscode.ViewColumn.Two,
+    { enableScripts: true }
+  );
 
-  // 定義情報セクション
-  if (definition) {
-    content += `## 📍 定義\n\n`;
-    content += `**種別**: ${getTypeLabel(definition.type)}\n\n`;
+  const escapeHtml = (text: string): string => {
+    const div = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+    return text.replace(/[&<>"']/g, (m) => div[m as keyof typeof div]);
+  };
 
-    if (definition.namespace) {
-      content += `**名前空間**: ${definition.namespace}\n\n`;
+  const relativePath = definition ? vscode.workspace.asRelativePath(definition.file) : '';
+  const fileUri = definition ? vscode.Uri.file(definition.file).toString() : '';
+
+  panel.webview.html = `<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${escapeHtml(explanation.title)}</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      padding: 20px;
+      line-height: 1.6;
+      color: var(--vscode-foreground);
+      background-color: var(--vscode-editor-background);
     }
-
-    if (definition.className) {
-      content += `**クラス**: ${definition.className}\n\n`;
+    h1, h2, h3 { color: var(--vscode-editor-foreground); }
+    h1 { font-size: 24px; border-bottom: 2px solid var(--vscode-panel-border); padding-bottom: 10px; }
+    h2 { font-size: 20px; margin-top: 30px; color: var(--vscode-textLink-foreground); }
+    h3 { font-size: 16px; margin-top: 20px; }
+    .section {
+      margin: 20px 0;
+      padding: 15px;
+      background: var(--vscode-editor-inactiveSelectionBackground);
+      border-radius: 5px;
     }
-
-    // ファイルパスと行番号
-    const relativePath = vscode.workspace.asRelativePath(definition.file);
-    content += `**場所**: [${relativePath}:${definition.line}](${vscode.Uri.file(definition.file).toString()}#L${definition.line})\n\n`;
-
-    // 定義のコードプレビュー
-    if (definition.code) {
-      const previewCode = definition.code.split('\n').slice(0, 10).join('\n');
-      content += `\`\`\`php\n${previewCode}\n\`\`\`\n\n`;
-
-      if (definition.code.split('\n').length > 10) {
-        content += `*... (定義の全体を見るには上記リンクをクリック)*\n\n`;
-      }
+    .parameter, .warning {
+      margin: 10px 0;
+      padding: 10px;
+      background: var(--vscode-editor-background);
+      border-radius: 3px;
     }
-
-    content += `---\n\n`;
-  } else {
-    content += `## ⚠️ 定義\n\n`;
-    content += `\`${identifier}\` の定義が見つかりませんでした。\n\n`;
-    content += `これは以下の理由が考えられます:\n`;
-    content += `- PHP標準関数またはLaravelフレームワーク関数\n`;
-    content += `- vendorディレクトリ内のライブラリ関数\n`;
-    content += `- 動的に定義された関数\n\n`;
-    content += `---\n\n`;
-  }
-
-  // AI説明セクション
-  content += `## 🤖 AI による詳細説明\n\n`;
-  content += `**種別**: ${explanation.functionType}\n\n`;
-  content += `${explanation.description}\n\n`;
-
-  if (explanation.parameters && explanation.parameters.length > 0) {
-    content += `### パラメータ\n\n`;
-    for (const param of explanation.parameters) {
-      content += `- **${param.name}** (${param.type}): ${param.description}\n`;
+    code {
+      background: var(--vscode-textCodeBlock-background);
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-family: 'Courier New', monospace;
     }
-    content += '\n';
-  }
-
-  if (explanation.returnType) {
-    content += `### 返り値\n\n`;
-    content += `- **型**: ${explanation.returnType}\n`;
-    if (explanation.returnDescription) {
-      content += `- **説明**: ${explanation.returnDescription}\n`;
+    pre {
+      background: var(--vscode-textCodeBlock-background);
+      padding: 10px;
+      border-radius: 5px;
+      overflow-x: auto;
     }
-    content += '\n';
-  }
-
-  if (explanation.example) {
-    content += `### 使用例\n\n\`\`\`php\n${explanation.example}\n\`\`\`\n\n`;
-  }
-
-  if (explanation.warnings && explanation.warnings.length > 0) {
-    content += `### ⚠️ 注意点\n\n`;
-    explanation.warnings.forEach((w: string) => {
-      content += `- ${w}\n`;
-    });
-    content += '\n';
-  }
-
-  // ドキュメントを開く
-  const document = await vscode.workspace.openTextDocument({
-    content,
-    language: 'markdown'
-  });
-
-  await vscode.window.showTextDocument(document, vscode.ViewColumn.Beside);
-
-  // 定義が見つかった場合、ジャンプ用のボタンを表示
-  if (definition) {
-    const jumpButton = await vscode.window.showInformationMessage(
-      `${identifier} の定義が見つかりました`,
-      '定義へジャンプ'
-    );
-
-    if (jumpButton === '定義へジャンプ') {
-      await jumpToDefinition(definition);
+    a {
+      color: var(--vscode-textLink-foreground);
+      text-decoration: none;
     }
-  }
+    a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <h1>📖 ${escapeHtml(explanation.title)}</h1>
+
+  ${definition ? `
+  <div class="section">
+    <h2>📍 定義</h2>
+    <p><strong>種別</strong>: ${escapeHtml(getTypeLabel(definition.type))}</p>
+    ${definition.namespace ? `<p><strong>名前空間</strong>: ${escapeHtml(definition.namespace)}</p>` : ''}
+    ${definition.className ? `<p><strong>クラス</strong>: ${escapeHtml(definition.className)}</p>` : ''}
+    <p><strong>場所</strong>: <a href="${fileUri}#L${definition.line}">${escapeHtml(relativePath)}:${definition.line}</a></p>
+    ${definition.code ? `
+      <h3>コードプレビュー</h3>
+      <pre><code>${escapeHtml(definition.code.split('\n').slice(0, 10).join('\n'))}</code></pre>
+      ${definition.code.split('\n').length > 10 ? '<p><em>... (定義の全体を見るには上記リンクをクリック)</em></p>' : ''}
+    ` : ''}
+  </div>
+  ` : `
+  <div class="section">
+    <h2>⚠️ 定義</h2>
+    <p><code>${escapeHtml(identifier)}</code> の定義が見つかりませんでした。</p>
+    <p>これは以下の理由が考えられます:</p>
+    <ul>
+      <li>PHP標準関数またはLaravelフレームワーク関数</li>
+      <li>vendorディレクトリ内のライブラリ関数</li>
+      <li>動的に定義された関数</li>
+    </ul>
+  </div>
+  `}
+
+  <div class="section">
+    <h2>🤖 AI による詳細説明</h2>
+    <p><strong>種別</strong>: ${escapeHtml(explanation.functionType || '')}</p>
+    <p>${escapeHtml(explanation.description || '')}</p>
+  </div>
+
+  ${explanation.parameters && explanation.parameters.length > 0 ? `
+  <div class="section">
+    <h3>📋 パラメータ</h3>
+    ${explanation.parameters.map((param: any) => `
+      <div class="parameter">
+        <strong>${escapeHtml(param.name)}</strong> (<code>${escapeHtml(param.type)}</code>): ${escapeHtml(param.description)}
+      </div>
+    `).join('')}
+  </div>
+  ` : ''}
+
+  ${explanation.returnType ? `
+  <div class="section">
+    <h3>↩️ 返り値</h3>
+    <p><strong>型</strong>: <code>${escapeHtml(explanation.returnType)}</code></p>
+    ${explanation.returnDescription ? `<p>${escapeHtml(explanation.returnDescription)}</p>` : ''}
+  </div>
+  ` : ''}
+
+  ${explanation.example ? `
+  <div class="section">
+    <h3>💻 使用例</h3>
+    <pre><code>${escapeHtml(explanation.example)}</code></pre>
+  </div>
+  ` : ''}
+
+  ${explanation.warnings && explanation.warnings.length > 0 ? `
+  <div class="section">
+    <h3>⚠️ 注意点</h3>
+    ${explanation.warnings.map((w: string) => `
+      <div class="warning">
+        ${escapeHtml(w)}
+      </div>
+    `).join('')}
+  </div>
+  ` : ''}
+</body>
+</html>`;
 }
 
 /**
@@ -808,119 +918,183 @@ JSON形式で返してください:
 }
 
 /**
- * 使用箇所の分析結果を表示
+ * 使用箇所の分析結果を表示（Webview版）
  */
 async function showUsageAnalysis(identifier: string, analysis: any, aiInsights: any) {
-  let content = `# "${identifier}" の使用箇所\n\n`;
+  const panel = vscode.window.createWebviewPanel(
+    'mireruUsageAnalysis',
+    `使用箇所: ${identifier}`,
+    vscode.ViewColumn.Two,
+    { enableScripts: true }
+  );
 
-  // サマリー
-  content += `## 📊 サマリー\n\n`;
-  content += `- **総使用箇所**: ${analysis.totalUsages}件\n`;
-  content += `- **検索範囲**: プロジェクト全体 (vendor除く)\n\n`;
+  const escapeHtml = (text: string): string => {
+    const div = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+    return text.replace(/[&<>"']/g, (m) => div[m as keyof typeof div]);
+  };
 
-  if (analysis.totalUsages === 0) {
-    content += `\n**使用箇所が見つかりませんでした。**\n\n`;
-    content += `以下の理由が考えられます:\n`;
-    content += `- 新しく定義されたが、まだ使用されていない\n`;
-    content += `- vendorディレクトリ内でのみ使用されている\n`;
-    content += `- 検索パターンに一致しない方法で使用されている\n\n`;
-  } else {
-    // 使用パターン
-    if (analysis.usagePatterns && analysis.usagePatterns.length > 0) {
-      content += `## 📈 使用パターン\n\n`;
-      for (const pattern of analysis.usagePatterns) {
+  const displayCount = Math.min(20, analysis.usageLocations?.length || 0);
+
+  panel.webview.html = `<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>使用箇所: ${escapeHtml(identifier)}</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      padding: 20px;
+      line-height: 1.6;
+      color: var(--vscode-foreground);
+      background-color: var(--vscode-editor-background);
+    }
+    h1, h2, h3 { color: var(--vscode-editor-foreground); }
+    h1 { font-size: 24px; border-bottom: 2px solid var(--vscode-panel-border); padding-bottom: 10px; }
+    h2 { font-size: 20px; margin-top: 30px; color: var(--vscode-textLink-foreground); }
+    h3 { font-size: 16px; margin-top: 20px; }
+    .section {
+      margin: 20px 0;
+      padding: 15px;
+      background: var(--vscode-editor-inactiveSelectionBackground);
+      border-radius: 5px;
+    }
+    .usage-item {
+      margin: 15px 0;
+      padding: 10px;
+      background: var(--vscode-editor-background);
+      border-left: 3px solid var(--vscode-textLink-foreground);
+    }
+    code {
+      background: var(--vscode-textCodeBlock-background);
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-family: 'Courier New', monospace;
+    }
+    pre {
+      background: var(--vscode-textCodeBlock-background);
+      padding: 10px;
+      border-radius: 5px;
+      overflow-x: auto;
+    }
+    a {
+      color: var(--vscode-textLink-foreground);
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 3px;
+      font-size: 12px;
+      background: var(--vscode-badge-background);
+      color: var(--vscode-badge-foreground);
+    }
+  </style>
+</head>
+<body>
+  <h1>📊 "${escapeHtml(identifier)}" の使用箇所</h1>
+
+  <div class="section">
+    <h2>サマリー</h2>
+    <p><strong>総使用箇所</strong>: ${analysis.totalUsages}件</p>
+    <p><strong>検索範囲</strong>: プロジェクト全体 (vendor除く)</p>
+  </div>
+
+  ${analysis.totalUsages === 0 ? `
+  <div class="section">
+    <h2>⚠️ 使用箇所が見つかりませんでした</h2>
+    <p>以下の理由が考えられます:</p>
+    <ul>
+      <li>新しく定義されたが、まだ使用されていない</li>
+      <li>vendorディレクトリ内でのみ使用されている</li>
+      <li>検索パターンに一致しない方法で使用されている</li>
+    </ul>
+  </div>
+  ` : `
+    ${analysis.usagePatterns && analysis.usagePatterns.length > 0 ? `
+    <div class="section">
+      <h2>📈 使用パターン</h2>
+      ${analysis.usagePatterns.map((pattern: any) => {
         const percentage = ((pattern.count / analysis.totalUsages) * 100).toFixed(1);
-        content += `### ${pattern.pattern} (${pattern.count}件 / ${percentage}%)\n\n`;
-        content += `${pattern.description}\n\n`;
+        return `
+        <div class="usage-item">
+          <h3>${escapeHtml(pattern.pattern)} <span class="badge">${pattern.count}件 / ${percentage}%</span></h3>
+          <p>${escapeHtml(pattern.description || '')}</p>
+          ${pattern.examples && pattern.examples.length > 0 ? `
+            <p><strong>例:</strong></p>
+            ${pattern.examples.slice(0, 2).map((ex: string) => `
+              <pre><code>${escapeHtml(ex)}</code></pre>
+            `).join('')}
+          ` : ''}
+        </div>
+        `;
+      }).join('')}
+    </div>
+    ` : ''}
 
-        if (pattern.examples && pattern.examples.length > 0) {
-          content += `**例:**\n`;
-          for (const example of pattern.examples.slice(0, 2)) {
-            content += `\`\`\`php\n${example}\n\`\`\`\n`;
-          }
-          content += '\n';
-        }
-      }
-    }
+    ${analysis.commonContexts && analysis.commonContexts.length > 0 ? `
+    <div class="section">
+      <h2>🎯 共通の使用コンテキスト</h2>
+      <ul>
+        ${analysis.commonContexts.map((ctx: string) => `
+          <li>${escapeHtml(ctx)}</li>
+        `).join('')}
+      </ul>
+    </div>
+    ` : ''}
 
-    // 共通コンテキスト
-    if (analysis.commonContexts && analysis.commonContexts.length > 0) {
-      content += `## 🎯 共通の使用コンテキスト\n\n`;
-      for (const context of analysis.commonContexts) {
-        content += `- ${context}\n`;
-      }
-      content += '\n';
-    }
+    ${aiInsights ? `
+    <div class="section">
+      <h2>🤖 AI による分析</h2>
+      <p><strong>主な用途</strong>: ${escapeHtml(aiInsights.mainPurpose || '')}</p>
 
-    // AI分析結果
-    if (aiInsights) {
-      content += `## 🤖 AI による分析\n\n`;
-      content += `**主な用途**: ${aiInsights.mainPurpose}\n\n`;
+      ${aiInsights.characteristics && aiInsights.characteristics.length > 0 ? `
+        <h3>特徴</h3>
+        <ul>
+          ${aiInsights.characteristics.map((char: string) => `<li>${escapeHtml(char)}</li>`).join('')}
+        </ul>
+      ` : ''}
 
-      if (aiInsights.characteristics && aiInsights.characteristics.length > 0) {
-        content += `**特徴**:\n`;
-        for (const char of aiInsights.characteristics) {
-          content += `- ${char}\n`;
-        }
-        content += '\n';
-      }
+      ${aiInsights.bestPractices && aiInsights.bestPractices.length > 0 ? `
+        <h3>ベストプラクティス</h3>
+        <ul>
+          ${aiInsights.bestPractices.map((bp: string) => `<li>${escapeHtml(bp)}</li>`).join('')}
+        </ul>
+      ` : ''}
 
-      if (aiInsights.bestPractices && aiInsights.bestPractices.length > 0) {
-        content += `**ベストプラクティス**:\n`;
-        for (const bp of aiInsights.bestPractices) {
-          content += `- ${bp}\n`;
-        }
-        content += '\n';
-      }
+      ${aiInsights.improvements && aiInsights.improvements.length > 0 ? `
+        <h3>改善の余地</h3>
+        <ul>
+          ${aiInsights.improvements.map((imp: string) => `<li>${escapeHtml(imp)}</li>`).join('')}
+        </ul>
+      ` : ''}
+    </div>
+    ` : ''}
 
-      if (aiInsights.improvements && aiInsights.improvements.length > 0) {
-        content += `**改善の余地**:\n`;
-        for (const imp of aiInsights.improvements) {
-          content += `- ${imp}\n`;
-        }
-        content += '\n';
-      }
-    }
-
-    // 使用箇所一覧（上位20件まで）
-    content += `## 📍 使用箇所一覧\n\n`;
-    const displayCount = Math.min(20, analysis.usageLocations.length);
-    content += `_表示: ${displayCount}件 / 全${analysis.totalUsages}件_\n\n`;
-
-    for (let i = 0; i < displayCount; i++) {
-      const usage = analysis.usageLocations[i];
-      const relativePath = vscode.workspace.asRelativePath(usage.file);
-      const typeLabel = getUsageTypeLabel(usage.type);
-
-      content += `### ${i + 1}. ${relativePath}:${usage.line} [${typeLabel}]\n\n`;
-      content += `\`\`\`php\n${usage.code}\n\`\`\`\n\n`;
-    }
-
-    if (analysis.totalUsages > displayCount) {
-      content += `\n_... 他 ${analysis.totalUsages - displayCount}件の使用箇所_\n\n`;
-    }
-  }
-
-  // ドキュメントを開く
-  const document = await vscode.workspace.openTextDocument({
-    content,
-    language: 'markdown'
-  });
-
-  await vscode.window.showTextDocument(document, vscode.ViewColumn.Beside);
-
-  // 使用箇所にジャンプする選択肢を提供
-  if (analysis.totalUsages > 0) {
-    const action = await vscode.window.showInformationMessage(
-      `${analysis.totalUsages}件の使用箇所が見つかりました`,
-      '最初の使用箇所へジャンプ'
-    );
-
-    if (action === '最初の使用箇所へジャンプ' && analysis.usageLocations.length > 0) {
-      const firstUsage = analysis.usageLocations[0];
-      await jumpToUsage(firstUsage);
-    }
-  }
+    <div class="section">
+      <h2>📍 使用箇所一覧</h2>
+      <p><em>表示: ${displayCount}件 / 全${analysis.totalUsages}件</em></p>
+      ${analysis.usageLocations?.slice(0, 20).map((usage: any, i: number) => {
+        const relativePath = vscode.workspace.asRelativePath(usage.file);
+        const fileUri = vscode.Uri.file(usage.file).toString();
+        const typeLabel = getUsageTypeLabel(usage.type);
+        return `
+        <div class="usage-item">
+          <h3>${i + 1}. <a href="${fileUri}#L${usage.line}">${escapeHtml(relativePath)}:${usage.line}</a> <span class="badge">${escapeHtml(typeLabel)}</span></h3>
+          <pre><code>${escapeHtml(usage.code || '')}</code></pre>
+        </div>
+        `;
+      }).join('')}
+      ${analysis.totalUsages > displayCount ? `
+        <p><em>... 他 ${analysis.totalUsages - displayCount}件の使用箇所</em></p>
+      ` : ''}
+    </div>
+  `}
+</body>
+</html>`;
 }
 
 /**

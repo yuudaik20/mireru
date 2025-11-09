@@ -6,14 +6,17 @@
 import * as vscode from 'vscode';
 import { BladeVariableAnalyzer } from './BladeVariableAnalyzer';
 import { AIServiceManager } from '../ai/AIServiceManager';
+import { DefinitionFinder } from '../services/DefinitionFinder';
 
 export class BladeHoverProvider implements vscode.HoverProvider {
   private analyzer: BladeVariableAnalyzer;
   private aiService: AIServiceManager;
+  private definitionFinder: DefinitionFinder;
 
   constructor(aiService: AIServiceManager) {
     this.analyzer = new BladeVariableAnalyzer();
     this.aiService = aiService;
+    this.definitionFinder = new DefinitionFinder();
   }
 
   async provideHover(
@@ -124,6 +127,26 @@ export class BladeHoverProvider implements vscode.HoverProvider {
       document.fileName
     );
 
+    // 定義を検索（プロジェクト内）
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    let definition = null;
+    if (workspaceFolders && workspaceFolders.length > 0) {
+      try {
+        // 変数名や関数名を抽出（$や@を除く）
+        const cleanExpression = fullExpression.replace(/^\$|^@/, '').split('->')[0].split('.')[0].trim();
+        if (cleanExpression) {
+          definition = await this.definitionFinder.findDefinition(
+            cleanExpression,
+            document,
+            workspaceFolders[0].uri.fsPath
+          );
+        }
+      } catch (error) {
+        // 定義検索エラーは無視
+        console.log('Definition search error:', error);
+      }
+    }
+
     // Markdownで説明を構築
     const markdown = new vscode.MarkdownString();
     markdown.isTrusted = true;
@@ -132,9 +155,33 @@ export class BladeHoverProvider implements vscode.HoverProvider {
     // タイトル
     markdown.appendMarkdown(`### 🔍 ${context.variable}\n\n`);
 
-    // タイプ
-    const typeLabel = this.getTypeLabel(context.type);
-    markdown.appendMarkdown(`**種別**: ${typeLabel}\n\n`);
+    // 定義情報があれば表示
+    if (definition) {
+      const relativePath = vscode.workspace.asRelativePath(definition.file);
+      markdown.appendMarkdown(`**📍 定義**: [${relativePath}:${definition.line}](${vscode.Uri.file(definition.file).toString()}#L${definition.line})\n\n`);
+
+      if (definition.type) {
+        const typeLabels: { [key: string]: string } = {
+          'function': '関数',
+          'class': 'クラス',
+          'method': 'メソッド',
+          'property': 'プロパティ',
+          'variable': '変数',
+          'constant': '定数'
+        };
+        markdown.appendMarkdown(`**種類**: ${typeLabels[definition.type] || definition.type}\n\n`);
+      }
+
+      // 定義のプレビュー（最初の3行）
+      if (definition.code) {
+        const previewLines = definition.code.split('\n').slice(0, 3).join('\n');
+        markdown.appendMarkdown(`**プレビュー**:\n\`\`\`${languageId}\n${previewLines}\n\`\`\`\n\n`);
+      }
+    } else {
+      // タイプ
+      const typeLabel = this.getTypeLabel(context.type);
+      markdown.appendMarkdown(`**種別**: ${typeLabel}\n\n`);
+    }
 
     // モデル名
     if (context.modelName) {
