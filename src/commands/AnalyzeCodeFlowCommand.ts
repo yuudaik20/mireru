@@ -137,12 +137,13 @@ ${context.afterCode}
 
 【分析してほしい内容】
 1. **全体の役割**: このコードブロックが何を実行しているか
-2. **処理の流れ**: ステップバイステップでの処理フロー
-3. **変数の説明**: 各変数が何を表し、どのように使われているか
-4. **関数の説明**: 呼び出されている関数・メソッドの役割
-5. **変数と関数の連携**: データがどのように流れ、変換されているか
-6. **Laravelの機能**: 使用されているLaravel固有の機能やパターン
-7. **注意点**: 理解すべきポイントや改善の余地
+2. **行ごとの解説**: コードを上から順に、1行ずつ何が起きているかを説明（空行やコメント行は除く）
+3. **処理の流れ**: ステップバイステップでの処理フロー
+4. **変数の説明**: 各変数が何を表し、どのように使われているか
+5. **関数の説明**: 呼び出されている関数・メソッドの役割
+6. **変数と関数の連携**: データがどのように流れ、変換されているか
+7. **Laravelの機能**: 使用されているLaravel固有の機能やパターン
+8. **注意点**: 理解すべきポイントや改善の余地
 
 【出力形式】
 JSON形式で以下の構造で返してください:
@@ -150,6 +151,13 @@ JSON形式で以下の構造で返してください:
 {
   "summary": "コードブロック全体の要約（1-2文）",
   "purpose": "このコードの役割・目的の詳細説明",
+  "lineByLineExplanation": [
+    {
+      "lineNumber": 1,
+      "code": "コード行",
+      "explanation": "この行で起きている処理の説明"
+    }
+  ],
   "flow": [
     {
       "step": 1,
@@ -203,6 +211,7 @@ JSON形式で以下の構造で返してください:
       return {
         summary: parsed.summary || '',
         purpose: parsed.purpose || '',
+        lineByLineExplanation: parsed.lineByLineExplanation || [],
         flow: parsed.flow || [],
         variables: parsed.variables || [],
         functions: parsed.functions || [],
@@ -215,6 +224,7 @@ JSON形式で以下の構造で返してください:
       return {
         summary: response.substring(0, 200),
         purpose: response,
+        lineByLineExplanation: [],
         flow: [],
         variables: [],
         functions: [],
@@ -318,6 +328,35 @@ JSON形式で以下の構造で返してください:
       background: var(--vscode-textBlockQuote-background);
       border-left: 3px solid var(--vscode-notificationsInfoIcon-foreground);
     }
+    .line-explanation {
+      margin: 10px 0;
+      padding: 10px;
+      background: var(--vscode-editor-background);
+      border-left: 3px solid var(--vscode-notificationsWarningIcon-foreground);
+    }
+    .line-explanation .line-number {
+      display: inline-block;
+      background: var(--vscode-badge-background);
+      color: var(--vscode-badge-foreground);
+      padding: 2px 8px;
+      border-radius: 3px;
+      font-weight: bold;
+      margin-right: 10px;
+      font-size: 12px;
+    }
+    .line-explanation .code-line {
+      font-family: 'Courier New', monospace;
+      background: var(--vscode-textCodeBlock-background);
+      padding: 5px 10px;
+      border-radius: 3px;
+      margin: 5px 0;
+      display: block;
+      font-size: 13px;
+    }
+    .line-explanation .explanation-text {
+      margin-top: 5px;
+      color: var(--vscode-foreground);
+    }
     code {
       background: var(--vscode-textCodeBlock-background);
       padding: 2px 6px;
@@ -337,6 +376,22 @@ JSON形式で以下の構造で返してください:
     <h2>🎯 役割・目的</h2>
     <p>${this.escapeHtml(analysis.purpose)}</p>
   </div>
+
+  ${analysis.lineByLineExplanation.length > 0 ? `
+  <div class="section">
+    <h2>📖 解説</h2>
+    <p>コードを上から順に、1行ずつ説明します：</p>
+    ${analysis.lineByLineExplanation.map(line => `
+      <div class="line-explanation">
+        <div>
+          <span class="line-number">行 ${line.lineNumber}</span>
+        </div>
+        <code class="code-line">${this.escapeHtml(line.code)}</code>
+        <div class="explanation-text">${this.escapeHtml(line.explanation)}</div>
+      </div>
+    `).join('')}
+  </div>
+  ` : ''}
 
   ${analysis.flow.length > 0 ? `
   <div class="section">
@@ -444,12 +499,19 @@ interface CodeContext {
 interface CodeFlowAnalysis {
   summary: string;
   purpose: string;
+  lineByLineExplanation: LineExplanation[];
   flow: FlowStep[];
   variables: VariableInfo[];
   functions: FunctionInfo[];
   dataFlow: string;
   laravelFeatures: LaravelFeature[];
   insights: string[];
+}
+
+interface LineExplanation {
+  lineNumber: number;
+  code: string;
+  explanation: string;
 }
 
 interface FlowStep {
