@@ -112,11 +112,11 @@ export function activate(context: vscode.ExtensionContext) {
   // コマンドの登録
   registerCommands(context);
 
-  // BladeのHoverProviderを登録
+  // BladeのHoverProviderを登録（PHP, Blade, HTML, JavaScriptに対応）
   const bladeHoverProvider = new BladeHoverProvider(aiService);
   context.subscriptions.push(
     vscode.languages.registerHoverProvider(
-      ['blade', 'php', 'html'],
+      ['blade', 'php', 'html', 'javascript', 'typescript'],
       bladeHoverProvider
     )
   );

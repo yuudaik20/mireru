@@ -25,6 +25,7 @@
     "onLanguage:php",
     "onLanguage:blade",
     "onLanguage:html",
+    "onLanguage:javascript",
     "onCommand:mireru.explain",
     "onCommand:mireru.explainWithDefinition",
     "onCommand:mireru.showUsages",
@@ -79,27 +80,27 @@
       "editor/context": [
         {
           "command": "mireru.explain",
-          "when": "editorHasSelection && editorLangId == php",
+          "when": "editorHasSelection && (editorLangId == php || editorLangId == blade || editorLangId == html || editorLangId == javascript)",
           "group": "mireru@1"
         },
         {
           "command": "mireru.explainWithDefinition",
-          "when": "editorHasSelection && editorLangId == php",
+          "when": "editorHasSelection && (editorLangId == php || editorLangId == blade || editorLangId == html || editorLangId == javascript)",
           "group": "mireru@2"
         },
         {
           "command": "mireru.showUsages",
-          "when": "editorHasSelection && editorLangId == php",
+          "when": "editorHasSelection && (editorLangId == php || editorLangId == blade || editorLangId == html || editorLangId == javascript)",
           "group": "mireru@3"
         },
         {
           "command": "mireru.analyzeCodeFlow",
-          "when": "editorHasSelection && editorLangId == php",
+          "when": "editorHasSelection && (editorLangId == php || editorLangId == blade || editorLangId == html || editorLangId == javascript)",
           "group": "mireru@4"
         },
         {
           "command": "mireru.trackVariable",
-          "when": "editorHasSelection && editorLangId == php",
+          "when": "editorHasSelection && (editorLangId == php || editorLangId == blade || editorLangId == html || editorLangId == javascript)",
           "group": "mireru@5"
         }
       ]
@@ -109,31 +110,48 @@
         "command": "mireru.explain",
         "key": "ctrl+shift+e",
         "mac": "cmd+shift+e",
-        "when": "editorTextFocus && editorHasSelection && editorLangId == php"
+        "when": "editorTextFocus && editorHasSelection && (editorLangId == php || editorLangId == blade || editorLangId == html || editorLangId == javascript)"
       },
       {
         "command": "mireru.explainWithDefinition",
         "key": "ctrl+shift+d",
         "mac": "cmd+shift+d",
-        "when": "editorTextFocus && editorHasSelection && editorLangId == php"
+        "when": "editorTextFocus && editorHasSelection && (editorLangId == php || editorLangId == blade || editorLangId == html || editorLangId == javascript)"
       },
       {
         "command": "mireru.showUsages",
         "key": "ctrl+shift+u",
         "mac": "cmd+shift+u",
-        "when": "editorTextFocus && editorHasSelection && editorLangId == php"
+        "when": "editorTextFocus && editorHasSelection && (editorLangId == php || editorLangId == blade || editorLangId == html || editorLangId == javascript)"
       },
       {
         "command": "mireru.analyzeCodeFlow",
         "key": "ctrl+shift+f",
         "mac": "cmd+shift+f",
-        "when": "editorTextFocus && editorHasSelection && editorLangId == php"
+        "when": "editorTextFocus && editorHasSelection && (editorLangId == php || editorLangId == blade || editorLangId == html || editorLangId == javascript)"
       },
       {
         "command": "mireru.showRoutes",
         "key": "ctrl+shift+r",
         "mac": "cmd+shift+r",
-        "when": "editorLangId == php"
+        "when": "editorLangId == php || editorLangId == blade"
+      }
+    ],
+    "languages": [
+      {
+        "id": "php",
+        "extensions": [".php"],
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "blade",
+        "extensions": [".blade.php"],
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "html",
+        "extensions": [".html", ".htm"],
+        "configuration": "./language-configuration.json"
       }
     ],
     "configuration": {

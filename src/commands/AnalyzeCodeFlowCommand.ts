@@ -114,7 +114,22 @@ export class AnalyzeCodeFlowCommand {
   private buildAnalysisPrompt(code: string, context: CodeContext, language: string): string {
     const langInstruction = language === 'ja' ? '日本語で' : 'in English';
 
-    return `あなたはPHP/Laravelの専門家です。以下の複数行のコードブロックを分析し、${langInstruction}詳細に説明してください。
+    // 言語ごとの専門家役割とフレームワーク機能
+    let expertRole = 'コード';
+    let frameworkFeatureLabel = 'フレームワーク固有の機能';
+
+    if (context.language === 'php' || context.language === 'blade') {
+      expertRole = 'PHP/Laravel';
+      frameworkFeatureLabel = 'Laravelの機能';
+    } else if (context.language === 'javascript' || context.language === 'typescript') {
+      expertRole = 'JavaScript/TypeScript';
+      frameworkFeatureLabel = 'フレームワーク/ライブラリの機能';
+    } else if (context.language === 'html') {
+      expertRole = 'HTML/Web';
+      frameworkFeatureLabel = 'HTML/Web技術の機能';
+    }
+
+    return `あなたは${expertRole}の専門家です。以下の複数行のコードブロックを分析し、${langInstruction}詳細に説明してください。
 
 【分析対象コード】
 \`\`\`${context.language}
@@ -143,7 +158,7 @@ ${context.afterCode}
 5. **変数の説明**: 各変数が何を表し、どのように使われているか
 6. **関数の説明**: 呼び出されている関数・メソッドの役割
 7. **変数と関数の連携**: データがどのように流れ、変換されているか
-8. **Laravelの機能**: 使用されているLaravel固有の機能やパターン
+8. **${frameworkFeatureLabel}**: 使用されている固有の機能やパターン
 9. **使用例**: このコードの実際の使用例
 10. **注意点**: 理解すべきポイントや改善の余地、よくある間違い
 
@@ -260,6 +275,10 @@ JSON形式で以下の構造で返してください:
   }
 
   private async showAnalysisResult(analysis: CodeFlowAnalysis): Promise<void> {
+    // 現在のエディタから言語を取得
+    const editor = vscode.window.activeTextEditor;
+    const languageId = editor?.document.languageId || 'php';
+
     // Webviewパネルを作成
     const panel = vscode.window.createWebviewPanel(
       'mireruCodeFlow',
@@ -271,10 +290,20 @@ JSON形式で以下の構造で返してください:
     );
 
     // HTMLコンテンツを生成
-    panel.webview.html = this.generateHtml(analysis);
+    panel.webview.html = this.generateHtml(analysis, languageId);
   }
 
-  private generateHtml(analysis: CodeFlowAnalysis): string {
+  private generateHtml(analysis: CodeFlowAnalysis, languageId: string): string {
+    // 言語ごとのフレームワーク機能ラベル
+    let frameworkLabel = 'フレームワーク機能';
+    if (languageId === 'php' || languageId === 'blade') {
+      frameworkLabel = 'Laravel機能';
+    } else if (languageId === 'javascript' || languageId === 'typescript') {
+      frameworkLabel = 'フレームワーク/ライブラリ機能';
+    } else if (languageId === 'html') {
+      frameworkLabel = 'HTML/Web技術';
+    }
+
     return `<!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -454,7 +483,7 @@ JSON形式で以下の構造で返してください:
 
   ${analysis.laravelFeatures.length > 0 ? `
   <div class="section">
-    <h2>🚀 Laravel機能</h2>
+    <h2>🚀 ${frameworkLabel}</h2>
     ${analysis.laravelFeatures.map(feature => `
       <div class="variable">
         <p><strong>${this.escapeHtml(feature.feature)}:</strong> ${this.escapeHtml(feature.description)}</p>

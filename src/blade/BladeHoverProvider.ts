@@ -21,12 +21,23 @@ export class BladeHoverProvider implements vscode.HoverProvider {
     position: vscode.Position,
     token: vscode.CancellationToken
   ): Promise<vscode.Hover | null> {
-    // より広範なパターンで変数・関数を検出
-    // $variable, $obj->prop, $array['key'], function_name() など
-    const wordRange = document.getWordRangeAtPosition(
-      position,
-      /\$[a-zA-Z_][a-zA-Z0-9_]*(?:->[a-zA-Z_][a-zA-Z0-9_]*|\[[^\]]+\])*|[a-zA-Z_][a-zA-Z0-9_]*\s*\(/
-    );
+    const languageId = document.languageId;
+
+    // 言語ごとの変数・関数検出パターン
+    let wordRange;
+    if (languageId === 'javascript' || languageId === 'typescript') {
+      // JavaScript/TypeScript: 変数、プロパティアクセス、関数呼び出し
+      wordRange = document.getWordRangeAtPosition(
+        position,
+        /[a-zA-Z_$][a-zA-Z0-9_$]*(?:\.[a-zA-Z_$][a-zA-Z0-9_$]*)*(?:\s*\()?|\b(?:const|let|var|function|class)\b/
+      );
+    } else {
+      // PHP/Blade/HTML: $変数、@ディレクティブ、関数呼び出し
+      wordRange = document.getWordRangeAtPosition(
+        position,
+        /\$[a-zA-Z_][a-zA-Z0-9_]*(?:->[a-zA-Z_][a-zA-Z0-9_]*|\[[^\]]+\])*|@[a-zA-Z_][a-zA-Z0-9_]*|[a-zA-Z_][a-zA-Z0-9_]*\s*\(/
+      );
+    }
 
     if (!wordRange) {
       return null;
@@ -34,48 +45,71 @@ export class BladeHoverProvider implements vscode.HoverProvider {
 
     const word = document.getText(wordRange);
 
-    // コンテキストを判定
-    const inBlade = this.isInBladeExpression(document, position);
-    const inPhpTag = this.isInPhpTag(document, position);
-    const inBladeDirective = this.isInBladeDirective(document, position);
+    // 言語ごとのコンテキスト判定
+    if (languageId === 'javascript' || languageId === 'typescript') {
+      // JavaScript/TypeScriptの場合は常に有効
+      const jsExpression = this.getJavaScriptExpression(document, position);
+      if (!jsExpression) {
+        return null;
+      }
+    } else {
+      // PHP/Blade/HTMLの場合は従来のロジック
+      const inBlade = this.isInBladeExpression(document, position);
+      const inPhpTag = this.isInPhpTag(document, position);
+      const inBladeDirective = this.isInBladeDirective(document, position);
 
-    // 変数（$で始まる）または関数呼び出し、またはBlade/PHPコンテキスト内のみ対象
-    const isVariable = word.startsWith('$');
-    const isFunction = word.includes('(');
-    const inValidContext = inBlade || inPhpTag || inBladeDirective;
+      const isVariable = word.startsWith('$');
+      const isBladeDirective = word.startsWith('@');
+      const isFunction = word.includes('(');
+      const inValidContext = inBlade || inPhpTag || inBladeDirective;
 
-    if (!isVariable && !isFunction && !inValidContext) {
-      return null;
+      if (!isVariable && !isBladeDirective && !isFunction && !inValidContext) {
+        return null;
+      }
     }
 
-    // 式全体を取得（優先順位付き）
+    // 式全体を取得（言語ごとに分岐）
     let fullExpression = null;
     let expressionRange = null;
 
-    // 1. Blade式から取得を試みる
-    if (inBlade) {
-      const bladeExpr = this.getFullBladeExpression(document, position);
-      if (bladeExpr) {
-        fullExpression = bladeExpr.expression;
-        expressionRange = bladeExpr.range;
+    if (languageId === 'javascript' || languageId === 'typescript') {
+      // JavaScriptの式を取得
+      const jsExpr = this.getJavaScriptExpression(document, position);
+      if (jsExpr) {
+        fullExpression = jsExpr.expression;
+        expressionRange = jsExpr.range;
       }
-    }
+    } else {
+      // PHP/Blade/HTMLの式を取得（優先順位付き）
+      const inBlade = this.isInBladeExpression(document, position);
+      const inPhpTag = this.isInPhpTag(document, position);
+      const inBladeDirective = this.isInBladeDirective(document, position);
 
-    // 2. PHPタグ内から取得を試みる
-    if (!fullExpression && inPhpTag) {
-      const phpExpr = this.getFullPhpExpression(document, position);
-      if (phpExpr) {
-        fullExpression = phpExpr.expression;
-        expressionRange = phpExpr.range;
+      // 1. Blade式から取得を試みる
+      if (inBlade) {
+        const bladeExpr = this.getFullBladeExpression(document, position);
+        if (bladeExpr) {
+          fullExpression = bladeExpr.expression;
+          expressionRange = bladeExpr.range;
+        }
       }
-    }
 
-    // 3. Bladeディレクティブ内から取得を試みる
-    if (!fullExpression && inBladeDirective) {
-      const directiveExpr = this.getBladeDirectiveExpression(document, position);
-      if (directiveExpr) {
-        fullExpression = directiveExpr.expression;
-        expressionRange = directiveExpr.range;
+      // 2. PHPタグ内から取得を試みる
+      if (!fullExpression && inPhpTag) {
+        const phpExpr = this.getFullPhpExpression(document, position);
+        if (phpExpr) {
+          fullExpression = phpExpr.expression;
+          expressionRange = phpExpr.range;
+        }
+      }
+
+      // 3. Bladeディレクティブ内から取得を試みる
+      if (!fullExpression && inBladeDirective) {
+        const directiveExpr = this.getBladeDirectiveExpression(document, position);
+        if (directiveExpr) {
+          fullExpression = directiveExpr.expression;
+          expressionRange = directiveExpr.range;
+        }
       }
     }
 
@@ -434,6 +468,103 @@ export class BladeHoverProvider implements vscode.HoverProvider {
     }
 
     return null;
+  }
+
+  /**
+   * JavaScript式全体を取得
+   * 変数、プロパティアクセス、関数呼び出しなどを正確に抽出
+   */
+  private getJavaScriptExpression(
+    document: vscode.TextDocument,
+    position: vscode.Position
+  ): { expression: string; range: vscode.Range } | null {
+    const line = document.lineAt(position.line).text;
+    const charPos = position.character;
+
+    // カーソル位置から式の開始位置まで戻る
+    let startPos = charPos;
+    while (startPos > 0) {
+      const char = line[startPos - 1];
+      // 識別子、ドット、括弧、$が続く限り戻る
+      if (/[a-zA-Z0-9_$.]/.test(char) || char === '[' || char === ']') {
+        startPos--;
+      } else if (char === ' ' || char === '\t') {
+        // スペースの前の文字をチェック
+        if (startPos >= 2 && /[a-zA-Z_$]/.test(line[startPos - 2])) {
+          startPos--;
+        } else {
+          break;
+        }
+      } else {
+        break;
+      }
+    }
+
+    // 式の終わりを探す
+    let endPos = charPos;
+    let depth = 0;
+    let inString = false;
+    let stringChar = '';
+
+    while (endPos < line.length) {
+      const char = line[endPos];
+
+      // 文字列の開始/終了を追跡
+      if ((char === '"' || char === "'" || char === '`') &&
+          (endPos === 0 || line[endPos - 1] !== '\\')) {
+        if (!inString) {
+          inString = true;
+          stringChar = char;
+        } else if (char === stringChar) {
+          inString = false;
+          stringChar = '';
+        }
+      }
+
+      if (!inString) {
+        // 括弧の深度を追跡
+        if (char === '(' || char === '[' || char === '{') {
+          depth++;
+          endPos++;
+        } else if (char === ')' || char === ']' || char === '}') {
+          if (depth > 0) {
+            depth--;
+            endPos++;
+          } else {
+            break;
+          }
+        } else if (/[a-zA-Z0-9_$.]/.test(char) || char === ' ') {
+          endPos++;
+        } else if (depth > 0) {
+          // 括弧内であれば、ほとんどの文字を許可
+          endPos++;
+        } else {
+          break;
+        }
+      } else {
+        endPos++;
+      }
+    }
+
+    if (startPos >= endPos) {
+      return null;
+    }
+
+    const expression = line.substring(startPos, endPos).trim();
+
+    // 有効な式かチェック
+    if (!expression || !expression.match(/[a-zA-Z_$]/)) {
+      return null;
+    }
+
+    const range = new vscode.Range(
+      position.line,
+      startPos,
+      position.line,
+      endPos
+    );
+
+    return { expression, range };
   }
 
   /**
