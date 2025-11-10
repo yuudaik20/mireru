@@ -45,7 +45,7 @@ Mirerは、AI（Claude API等）を活用してコードの理解、ナビゲー
 
    VSIXファイルから手動インストール:
    ```bash
-   code --install-extension mireru-0.1.0.vsix
+   code --install-extension mireru-0.8.1.vsix
    ```
 
 2. API キーの設定
@@ -62,14 +62,6 @@ PHPファイルを開くと自動的に関数が色分けされます。
 1. コード（関数名、変数名等）を選択
 2. 右クリック
 3. 「Mireru: 説明を表示」を選択
-
-### Laravelルートの表示
-1. コマンドパレット（`Ctrl+Shift+P`）を開く
-2. 「Mireru: Laravelルートを表示」を実行
-
-### 依存関係グラフの表示
-1. コマンドパレット（`Ctrl+Shift+P`）を開く
-2. 「Mireru: 依存関係グラフを表示」を実行
 
 ## 設定
 
@@ -116,12 +108,11 @@ MIT License - 詳細は[LICENSE](LICENSE)ファイルを参照
 
 ## 更新履歴
 
-### v0.1.0 (2025-11-09)
+### v0.8.1 (2025-11-09)
 - 初回リリース
 - 関数の色分け表示機能
 - AI駆動の説明機能
 - Laravel専用機能（ルート解析）
-- 依存関係グラフ表示
 
 ---
 
