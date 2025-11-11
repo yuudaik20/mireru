@@ -2,6 +2,23 @@
 
 All notable changes to the "Mireru - AI Code Intelligence" extension will be documented in this file.
 
+## [0.8.7] - 2025-11-11
+
+### Fixed
+- 依存関係グラフが何も表示されない問題を修正
+- デバッグログを追加して診断を改善
+
+### Added
+- 右クリックメニューから依存関係グラフとプロジェクトマップを表示可能に
+- Laravelルート名の使用箇所検索機能を大幅に改善：
+  - web.phpから->name()を解析してルート名を抽出
+  - route()ヘルパーの使用箇所を正確に検索
+  - Blade内の{{ route('name') }}パターンを検出
+  - redirect()->route('name')パターンを検出
+  - to_route('name')パターンを検出
+  - 使用箇所をQuickPickで表示
+  - 選択した使用箇所へ直接ジャンプ可能
+
 ## [0.8.6] - 2025-11-11
 
 ### Added

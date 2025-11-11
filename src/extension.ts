@@ -243,7 +243,13 @@ function registerCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand('mireru.showRouteDetails', async (route) => {
       if (route) {
-        RouteDetailsPanel.show(route, context);
+        const workspaceFolders = vscode.workspace.workspaceFolders;
+        if (workspaceFolders) {
+          const rootPath = workspaceFolders[0].uri.fsPath;
+          RouteDetailsPanel.show(route, context, laravelAnalyzer, rootPath);
+        } else {
+          RouteDetailsPanel.show(route, context, laravelAnalyzer, '');
+        }
       }
     })
   );

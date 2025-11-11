@@ -441,4 +441,108 @@ export class LaravelAnalyzer {
 
     return items;
   }
+
+  /**
+   * ルート名の使用箇所を検索
+   */
+  async findRouteNameUsages(rootPath: string, routeName: string): Promise<Array<{ file: string; line: number; content: string; usage: string }>> {
+    const usages: Array<{ file: string; line: number; content: string; usage: string }> = [];
+
+    try {
+      // プロジェクト内の全PHPファイルとBladeファイルを検索
+      const files = await this.findAllProjectFiles(rootPath);
+
+      for (const file of files) {
+        const content = await fs.promises.readFile(file, 'utf-8');
+        const lines = content.split('\n');
+
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i];
+
+          // route('route.name')パターン
+          const routePattern = new RegExp(`route\\s*\\(\\s*['"]${routeName}['"]`, 'g');
+          if (routePattern.test(line)) {
+            usages.push({
+              file,
+              line: i + 1,
+              content: line.trim(),
+              usage: 'route()'
+            });
+          }
+
+          // {{ route('route.name') }}パターン（Blade）
+          const bladePattern = new RegExp(`{{.*route\\s*\\(\\s*['"]${routeName}['"]`, 'g');
+          if (bladePattern.test(line)) {
+            usages.push({
+              file,
+              line: i + 1,
+              content: line.trim(),
+              usage: 'Blade: route()'
+            });
+          }
+
+          // redirect()->route('route.name')パターン
+          const redirectPattern = new RegExp(`redirect\\s*\\(\\s*\\)\\s*->\\s*route\\s*\\(\\s*['"]${routeName}['"]`, 'g');
+          if (redirectPattern.test(line)) {
+            usages.push({
+              file,
+              line: i + 1,
+              content: line.trim(),
+              usage: 'redirect()->route()'
+            });
+          }
+
+          // to_route('route.name')パターン
+          const toRoutePattern = new RegExp(`to_route\\s*\\(\\s*['"]${routeName}['"]`, 'g');
+          if (toRoutePattern.test(line)) {
+            usages.push({
+              file,
+              line: i + 1,
+              content: line.trim(),
+              usage: 'to_route()'
+            });
+          }
+        }
+      }
+    } catch (error) {
+      console.error(`Failed to find route name usages for ${routeName}:`, error);
+    }
+
+    return usages;
+  }
+
+  /**
+   * プロジェクト内の全PHPとBladeファイルを検索
+   */
+  private async findAllProjectFiles(rootPath: string): Promise<string[]> {
+    const files: string[] = [];
+    const excludeDirs = ['node_modules', 'vendor', '.git', 'storage', 'bootstrap/cache'];
+
+    const walk = async (dir: string): Promise<void> => {
+      try {
+        const entries = await fs.promises.readdir(dir, { withFileTypes: true });
+
+        for (const entry of entries) {
+          const fullPath = path.join(dir, entry.name);
+
+          if (entry.isDirectory()) {
+            const relativePath = path.relative(rootPath, fullPath);
+            if (!excludeDirs.some(exclude => relativePath.startsWith(exclude))) {
+              await walk(fullPath);
+            }
+          } else if (entry.isFile()) {
+            const ext = path.extname(entry.name).toLowerCase();
+            if (ext === '.php' || entry.name.endsWith('.blade.php')) {
+              files.push(fullPath);
+            }
+          }
+        }
+      } catch (error) {
+        // ディレクトリアクセスエラーは無視
+      }
+    };
+
+    await walk(rootPath);
+    return files;
+  }
 }

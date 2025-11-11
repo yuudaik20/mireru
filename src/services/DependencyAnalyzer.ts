@@ -46,6 +46,7 @@ export class DependencyAnalyzer {
 
     // ファイル一覧を取得
     const files = await this.collectFiles(rootPath, options);
+    console.log(`[DependencyAnalyzer] Collected ${files.length} files for analysis`);
 
     // 各ファイルを分析
     for (const file of files) {
@@ -59,8 +60,11 @@ export class DependencyAnalyzer {
       }
     }
 
+    console.log(`[DependencyAnalyzer] Found ${fileDependencies.length} file dependencies`);
+
     // 依存関係グラフを構築
     const graph = this.buildGraph(fileDependencies, files);
+    console.log(`[DependencyAnalyzer] Built graph with ${graph.nodes.length} nodes and ${graph.edges.length} edges`);
 
     // 循環依存を検出
     const circularDependencies = options?.detectCircular !== false

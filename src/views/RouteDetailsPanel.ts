@@ -5,14 +5,20 @@
 
 import * as vscode from 'vscode';
 import { RouteInfo } from '../types/laravel';
+import { LaravelAnalyzer } from '../laravel/LaravelAnalyzer';
 import * as fs from 'fs';
 import * as path from 'path';
 
 export class RouteDetailsPanel {
+  private static laravelAnalyzer: LaravelAnalyzer;
+  private static rootPath: string;
+
   /**
    * ルート詳細をWebviewパネルで表示
    */
-  static show(route: RouteInfo, context: vscode.ExtensionContext): void {
+  static show(route: RouteInfo, context: vscode.ExtensionContext, analyzer: LaravelAnalyzer, rootPath: string): void {
+    this.laravelAnalyzer = analyzer;
+    this.rootPath = rootPath;
     const panel = vscode.window.createWebviewPanel(
       'mireruRouteDetails',
       `ルート詳細: ${route.method} ${route.uri}`,
@@ -107,13 +113,40 @@ export class RouteDetailsPanel {
    * ルート使用箇所を検索
    */
   private static async searchRouteUsages(routeName: string): Promise<void> {
-    // route('name') の使用箇所を検索
-    await vscode.commands.executeCommand('workbench.action.findInFiles', {
-      query: `route('${routeName}')`,
-      isRegex: false,
-      isCaseSensitive: true,
-      matchWholeWord: false
-    });
+    try {
+      // LaravelAnalyzerを使ってルート名の使用箇所を検索
+      const usages = await this.laravelAnalyzer.findRouteNameUsages(this.rootPath, routeName);
+
+      if (usages.length === 0) {
+        vscode.window.showInformationMessage(`ルート名 '${routeName}' の使用箇所が見つかりませんでした`);
+        return;
+      }
+
+      // QuickPickで使用箇所を表示
+      const items = usages.map(usage => ({
+        label: `$(file) ${path.basename(usage.file)}:${usage.line}`,
+        description: usage.usage,
+        detail: usage.content,
+        usage
+      }));
+
+      const selected = await vscode.window.showQuickPick(items, {
+        placeHolder: `${usages.length}個の使用箇所が見つかりました。選択してジャンプ`,
+        matchOnDescription: true,
+        matchOnDetail: true
+      });
+
+      if (selected) {
+        // 選択した箇所にジャンプ
+        const document = await vscode.workspace.openTextDocument(selected.usage.file);
+        const editor = await vscode.window.showTextDocument(document);
+        const position = new vscode.Position(selected.usage.line - 1, 0);
+        editor.selection = new vscode.Selection(position, position);
+        editor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenter);
+      }
+    } catch (error) {
+      vscode.window.showErrorMessage(`ルート名の使用箇所検索に失敗しました: ${error}`);
+    }
   }
 
   /**
