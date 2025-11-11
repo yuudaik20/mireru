@@ -2,6 +2,18 @@
 
 All notable changes to the "Mireru - AI Code Intelligence" extension will be documented in this file.
 
+## [0.8.8] - 2025-11-11
+
+### Changed
+- **依存関係グラフを軽量化**: Force-directedレイアウトから軽量なリスト表示に変更
+  - 複雑な物理演算を削除し、シンプルな表示で高速化
+  - Top 10の最も依存されているファイル/依存しているファイルを表示
+  - 重要度バッジで一目で把握可能
+  - ファイルクリックで直接ジャンプ
+
+### Added
+- 右クリックメニューから「Laravelルートを表示」が実行可能に
+
 ## [0.8.7] - 2025-11-11
 
 ### Fixed

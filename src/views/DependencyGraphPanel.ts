@@ -1,11 +1,11 @@
 /**
- * Dependency Graph Panel
- * 依存関係グラフをWebviewで表示
+ * Dependency Graph Panel (Simplified)
+ * 依存関係を軽量なリスト形式で表示
  */
 
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { DependencyAnalysisResult, DependencyGraph, DependencyNode, DependencyEdge } from '../types/dependency';
+import { DependencyAnalysisResult } from '../types/dependency';
 
 export class DependencyGraphPanel {
   /**
@@ -14,7 +14,7 @@ export class DependencyGraphPanel {
   static show(result: DependencyAnalysisResult, context: vscode.ExtensionContext): void {
     const panel = vscode.window.createWebviewPanel(
       'mireruDependencyGraph',
-      `依存関係グラフ: ${path.basename(result.rootPath)}`,
+      `依存関係: ${path.basename(result.rootPath)}`,
       vscode.ViewColumn.One,
       {
         enableScripts: true,
@@ -42,36 +42,17 @@ export class DependencyGraphPanel {
   }
 
   /**
-   * HTMLコンテンツを生成
+   * HTMLコンテンツを生成（シンプル版）
    */
   private static getHtmlContent(result: DependencyAnalysisResult): string {
     const graph = result.graph;
-    const graphData = JSON.stringify({
-      nodes: graph.nodes.map(n => ({
-        id: n.id,
-        label: n.label,
-        type: n.type,
-        filePath: n.filePath,
-        incomingCount: n.incomingCount,
-        outgoingCount: n.outgoingCount,
-        importance: n.importance
-      })),
-      edges: graph.edges.map(e => ({
-        id: e.id,
-        from: e.from,
-        to: e.to,
-        type: e.type,
-        strength: e.strength,
-        weight: e.weight
-      }))
-    });
 
     return `<!DOCTYPE html>
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>依存関係グラフ</title>
+  <title>依存関係</title>
   <style>
     * {
       margin: 0;
@@ -82,518 +63,212 @@ export class DependencyGraphPanel {
       font-family: var(--vscode-font-family);
       color: var(--vscode-foreground);
       background-color: var(--vscode-editor-background);
-      overflow: hidden;
+      padding: 20px;
     }
-    .container {
-      display: flex;
-      height: 100vh;
-    }
-    .sidebar {
-      width: 300px;
-      background-color: var(--vscode-sideBar-background);
-      border-right: 1px solid var(--vscode-panel-border);
-      overflow-y: auto;
-      padding: 15px;
-    }
-    .graph-container {
-      flex: 1;
-      position: relative;
-    }
-    canvas {
-      display: block;
-      cursor: grab;
-    }
-    canvas:active {
-      cursor: grabbing;
-    }
-    .section {
+    .header {
+      border-bottom: 2px solid var(--vscode-panel-border);
+      padding-bottom: 15px;
       margin-bottom: 20px;
     }
-    .section-title {
-      font-size: 14px;
-      font-weight: bold;
+    h1 {
+      font-size: 24px;
       margin-bottom: 10px;
-      color: var(--vscode-editor-foreground);
-      border-bottom: 1px solid var(--vscode-panel-border);
-      padding-bottom: 5px;
     }
-    .stat-item {
-      display: flex;
-      justify-content: space-between;
-      padding: 5px 0;
-      font-size: 13px;
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      margin-bottom: 30px;
+    }
+    .stat-card {
+      background-color: var(--vscode-editor-inactiveSelectionBackground);
+      padding: 15px;
+      border-radius: 5px;
+      border: 1px solid var(--vscode-panel-border);
     }
     .stat-label {
+      font-size: 12px;
       color: var(--vscode-descriptionForeground);
+      margin-bottom: 5px;
     }
     .stat-value {
-      color: var(--vscode-editor-foreground);
+      font-size: 28px;
       font-weight: bold;
+      color: var(--vscode-editor-foreground);
+    }
+    .section {
+      margin-bottom: 30px;
+    }
+    .section-title {
+      font-size: 18px;
+      font-weight: bold;
+      margin-bottom: 15px;
+      padding-bottom: 5px;
+      border-bottom: 1px solid var(--vscode-panel-border);
+    }
+    .node-list {
+      display: grid;
+      gap: 8px;
     }
     .node-item {
-      padding: 8px;
-      margin: 5px 0;
+      padding: 12px;
       background-color: var(--vscode-editor-inactiveSelectionBackground);
       border-radius: 3px;
-      font-size: 12px;
       cursor: pointer;
       transition: background-color 0.2s;
+      border: 1px solid transparent;
     }
     .node-item:hover {
       background-color: var(--vscode-list-hoverBackground);
+      border-color: var(--vscode-focusBorder);
     }
     .node-name {
       font-weight: bold;
-      margin-bottom: 3px;
+      margin-bottom: 5px;
+      font-size: 14px;
     }
     .node-stats {
+      font-size: 12px;
       color: var(--vscode-descriptionForeground);
-      font-size: 11px;
-    }
-    .controls {
-      position: absolute;
-      top: 10px;
-      right: 10px;
-      background-color: var(--vscode-editor-background);
-      border: 1px solid var(--vscode-panel-border);
-      border-radius: 5px;
-      padding: 10px;
       display: flex;
-      gap: 10px;
-      align-items: center;
+      gap: 15px;
     }
-    .btn {
-      background-color: var(--vscode-button-background);
-      color: var(--vscode-button-foreground);
-      border: none;
-      padding: 6px 12px;
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
       border-radius: 3px;
-      cursor: pointer;
-      font-size: 12px;
-      transition: background-color 0.2s;
-    }
-    .btn:hover {
-      background-color: var(--vscode-button-hoverBackground);
-    }
-    .btn-small {
-      padding: 4px 8px;
       font-size: 11px;
+      font-weight: bold;
     }
-    .legend {
-      position: absolute;
-      bottom: 10px;
-      left: 10px;
-      background-color: var(--vscode-editor-background);
-      border: 1px solid var(--vscode-panel-border);
-      border-radius: 5px;
-      padding: 10px;
-      font-size: 11px;
+    .badge-high {
+      background-color: var(--vscode-charts-red);
+      color: white;
     }
-    .legend-item {
-      display: flex;
-      align-items: center;
-      margin: 5px 0;
+    .badge-medium {
+      background-color: var(--vscode-charts-orange);
+      color: white;
     }
-    .legend-color {
-      width: 12px;
-      height: 12px;
-      border-radius: 50%;
-      margin-right: 8px;
+    .badge-low {
+      background-color: var(--vscode-charts-green);
+      color: white;
     }
-    .info-panel {
-      position: absolute;
-      top: 60px;
-      right: 10px;
-      background-color: var(--vscode-editor-background);
-      border: 1px solid var(--vscode-panel-border);
-      border-radius: 5px;
-      padding: 10px;
-      max-width: 300px;
-      display: none;
-      font-size: 12px;
-    }
-    .info-panel.visible {
-      display: block;
-    }
-    .circular-warning {
+    .warning-box {
       background-color: var(--vscode-inputValidation-warningBackground);
       border: 1px solid var(--vscode-inputValidation-warningBorder);
       color: var(--vscode-inputValidation-warningForeground);
-      padding: 10px;
-      border-radius: 3px;
-      margin-bottom: 15px;
-      font-size: 12px;
+      padding: 15px;
+      border-radius: 5px;
+      margin-bottom: 20px;
       cursor: pointer;
+    }
+    .warning-box:hover {
+      opacity: 0.8;
+    }
+    .empty-state {
+      text-align: center;
+      padding: 40px;
+      color: var(--vscode-descriptionForeground);
+      font-style: italic;
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <div class="sidebar">
-      <div class="section">
-        <div class="section-title">📊 統計情報</div>
-        <div class="stat-item">
-          <span class="stat-label">総ノード数:</span>
-          <span class="stat-value">${graph.statistics.totalNodes}</span>
-        </div>
-        <div class="stat-item">
-          <span class="stat-label">総依存関係数:</span>
-          <span class="stat-value">${graph.statistics.totalEdges}</span>
-        </div>
-        <div class="stat-item">
-          <span class="stat-label">循環依存:</span>
-          <span class="stat-value">${result.circularDependencies.length}</span>
-        </div>
-      </div>
+  <div class="header">
+    <h1>📊 依存関係分析</h1>
+    <p style="color: var(--vscode-descriptionForeground);">プロジェクト: ${this.escapeHtml(path.basename(result.rootPath))}</p>
+  </div>
 
-      ${result.circularDependencies.length > 0 ? `
-      <div class="circular-warning" onclick="showCircular()">
-        ⚠️ ${result.circularDependencies.length}個の循環依存が検出されました。クリックして詳細を表示
-      </div>
-      ` : ''}
+  <div class="stats">
+    <div class="stat-card">
+      <div class="stat-label">総ファイル数</div>
+      <div class="stat-value">${graph.statistics.totalNodes}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">依存関係数</div>
+      <div class="stat-value">${graph.statistics.totalEdges}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">循環依存</div>
+      <div class="stat-value">${result.circularDependencies.length}</div>
+    </div>
+  </div>
 
-      <div class="section">
-        <div class="section-title">🔝 最も依存されているファイル</div>
-        ${graph.statistics.mostDepended.slice(0, 5).map(node => `
-          <div class="node-item" onclick="focusNode('${this.escapeHtml(node.id)}')">
-            <div class="node-name">${this.escapeHtml(node.label)}</div>
-            <div class="node-stats">被依存数: ${node.incomingCount}</div>
+  ${result.circularDependencies.length > 0 ? `
+  <div class="warning-box" onclick="showCircular()">
+    ⚠️ ${result.circularDependencies.length}個の循環依存が検出されました。クリックして詳細を表示
+  </div>
+  ` : ''}
+
+  <div class="section">
+    <div class="section-title">🔝 最も依存されているファイル（Top 10）</div>
+    ${graph.statistics.mostDepended.length > 0 ? `
+      <div class="node-list">
+        ${graph.statistics.mostDepended.slice(0, 10).map(node => `
+          <div class="node-item" onclick="openFile('${this.escapeHtml(node.filePath || '')}', 1)">
+            <div class="node-name">📄 ${this.escapeHtml(node.label)}</div>
+            <div class="node-stats">
+              <span>被依存: ${node.incomingCount}ファイル</span>
+              <span>依存: ${node.outgoingCount}ファイル</span>
+              <span class="badge ${this.getImportanceBadge(node.importance)}">${this.getImportanceLabel(node.importance)}</span>
+            </div>
           </div>
         `).join('')}
       </div>
+    ` : '<div class="empty-state">依存されているファイルがありません</div>'}
+  </div>
 
-      <div class="section">
-        <div class="section-title">🔗 最も多く依存しているファイル</div>
-        ${graph.statistics.mostDepending.slice(0, 5).map(node => `
-          <div class="node-item" onclick="focusNode('${this.escapeHtml(node.id)}')">
-            <div class="node-name">${this.escapeHtml(node.label)}</div>
-            <div class="node-stats">依存数: ${node.outgoingCount}</div>
+  <div class="section">
+    <div class="section-title">🔗 最も多く依存しているファイル（Top 10）</div>
+    ${graph.statistics.mostDepending.length > 0 ? `
+      <div class="node-list">
+        ${graph.statistics.mostDepending.slice(0, 10).map(node => `
+          <div class="node-item" onclick="openFile('${this.escapeHtml(node.filePath || '')}', 1)">
+            <div class="node-name">📄 ${this.escapeHtml(node.label)}</div>
+            <div class="node-stats">
+              <span>依存: ${node.outgoingCount}ファイル</span>
+              <span>被依存: ${node.incomingCount}ファイル</span>
+            </div>
           </div>
         `).join('')}
       </div>
-    </div>
-
-    <div class="graph-container">
-      <canvas id="graph-canvas"></canvas>
-
-      <div class="controls">
-        <button class="btn btn-small" onclick="resetView()">🔄 リセット</button>
-        <button class="btn btn-small" onclick="zoomIn()">➕ ズームイン</button>
-        <button class="btn btn-small" onclick="zoomOut()">➖ ズームアウト</button>
-      </div>
-
-      <div class="legend">
-        <div class="legend-item">
-          <div class="legend-color" style="background-color: #4A90E2;"></div>
-          <span>通常ノード</span>
-        </div>
-        <div class="legend-item">
-          <div class="legend-color" style="background-color: #E24A4A;"></div>
-          <span>重要ノード（依存多数）</span>
-        </div>
-        <div class="legend-item">
-          <div class="legend-color" style="background-color: #50C878;"></div>
-          <span>選択中</span>
-        </div>
-      </div>
-
-      <div id="info-panel" class="info-panel"></div>
-    </div>
+    ` : '<div class="empty-state">依存しているファイルがありません</div>'}
   </div>
 
   <script>
     const vscode = acquireVsCodeApi();
-    const graphData = ${graphData};
 
-    const canvas = document.getElementById('graph-canvas');
-    const ctx = canvas.getContext('2d');
-
-    let width = canvas.parentElement.clientWidth;
-    let height = canvas.parentElement.clientHeight;
-    canvas.width = width;
-    canvas.height = height;
-
-    // グラフレイアウト用のデータ
-    let nodes = graphData.nodes.map(n => ({
-      ...n,
-      x: Math.random() * width,
-      y: Math.random() * height,
-      vx: 0,
-      vy: 0,
-      radius: Math.max(5, Math.min(15, 5 + n.importance))
-    }));
-
-    let edges = graphData.edges;
-    let selectedNode = null;
-    let isDragging = false;
-    let dragNode = null;
-    let offset = { x: 0, y: 0 };
-    let scale = 1;
-    let panX = 0;
-    let panY = 0;
-
-    // Force-directedレイアウト
-    function simulate() {
-      const alpha = 0.3;
-      const repulsion = 5000;
-      const attraction = 0.01;
-      const centerGravity = 0.01;
-
-      // 反発力
-      for (let i = 0; i < nodes.length; i++) {
-        for (let j = i + 1; j < nodes.length; j++) {
-          const dx = nodes[j].x - nodes[i].x;
-          const dy = nodes[j].y - nodes[i].y;
-          const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-          const force = repulsion / (dist * dist);
-
-          nodes[i].vx -= (dx / dist) * force;
-          nodes[i].vy -= (dy / dist) * force;
-          nodes[j].vx += (dx / dist) * force;
-          nodes[j].vy += (dy / dist) * force;
-        }
-      }
-
-      // 引力（エッジに沿って）
-      for (const edge of edges) {
-        const source = nodes.find(n => n.id === edge.from);
-        const target = nodes.find(n => n.id === edge.to);
-
-        if (source && target) {
-          const dx = target.x - source.x;
-          const dy = target.y - source.y;
-          const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-          const force = dist * attraction;
-
-          source.vx += (dx / dist) * force;
-          source.vy += (dy / dist) * force;
-          target.vx -= (dx / dist) * force;
-          target.vy -= (dy / dist) * force;
-        }
-      }
-
-      // 中心への重力
-      const centerX = width / 2;
-      const centerY = height / 2;
-      for (const node of nodes) {
-        const dx = centerX - node.x;
-        const dy = centerY - node.y;
-        node.vx += dx * centerGravity;
-        node.vy += dy * centerGravity;
-      }
-
-      // 速度を適用
-      for (const node of nodes) {
-        if (node !== dragNode) {
-          node.x += node.vx * alpha;
-          node.y += node.vy * alpha;
-          node.vx *= 0.9;
-          node.vy *= 0.9;
-
-          // 画面内に収める
-          node.x = Math.max(node.radius, Math.min(width - node.radius, node.x));
-          node.y = Math.max(node.radius, Math.min(height - node.radius, node.y));
-        }
-      }
-    }
-
-    function draw() {
-      ctx.clearRect(0, 0, width, height);
-      ctx.save();
-      ctx.translate(panX, panY);
-      ctx.scale(scale, scale);
-
-      // エッジを描画
-      for (const edge of edges) {
-        const source = nodes.find(n => n.id === edge.from);
-        const target = nodes.find(n => n.id === edge.to);
-
-        if (source && target) {
-          ctx.beginPath();
-          ctx.moveTo(source.x, source.y);
-          ctx.lineTo(target.x, target.y);
-          ctx.strokeStyle = 'rgba(150, 150, 150, 0.3)';
-          ctx.lineWidth = edge.weight;
-          ctx.stroke();
-
-          // 矢印を描画
-          const angle = Math.atan2(target.y - source.y, target.x - source.x);
-          const arrowSize = 8;
-          ctx.save();
-          ctx.translate(target.x, target.y);
-          ctx.rotate(angle);
-          ctx.beginPath();
-          ctx.moveTo(-arrowSize, -arrowSize / 2);
-          ctx.lineTo(0, 0);
-          ctx.lineTo(-arrowSize, arrowSize / 2);
-          ctx.strokeStyle = 'rgba(150, 150, 150, 0.5)';
-          ctx.lineWidth = 2;
-          ctx.stroke();
-          ctx.restore();
-        }
-      }
-
-      // ノードを描画
-      for (const node of nodes) {
-        ctx.beginPath();
-        ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
-
-        // 色を決定
-        if (node === selectedNode) {
-          ctx.fillStyle = '#50C878';
-        } else if (node.importance > 10) {
-          ctx.fillStyle = '#E24A4A';
-        } else {
-          ctx.fillStyle = '#4A90E2';
-        }
-        ctx.fill();
-
-        // ラベルを描画
-        ctx.fillStyle = '#FFFFFF';
-        ctx.font = '10px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText(node.label.substring(0, 15), node.x, node.y + node.radius + 12);
-      }
-
-      ctx.restore();
-    }
-
-    function animate() {
-      simulate();
-      draw();
-      requestAnimationFrame(animate);
-    }
-
-    // マウスイベント
-    canvas.addEventListener('mousedown', (e) => {
-      const rect = canvas.getBoundingClientRect();
-      const x = (e.clientX - rect.left - panX) / scale;
-      const y = (e.clientY - rect.top - panY) / scale;
-
-      dragNode = nodes.find(n => {
-        const dx = n.x - x;
-        const dy = n.y - y;
-        return Math.sqrt(dx * dx + dy * dy) < n.radius;
+    function openFile(filePath, line) {
+      vscode.postMessage({
+        command: 'openFile',
+        filePath: filePath,
+        line: line
       });
-
-      if (dragNode) {
-        isDragging = true;
-        offset = { x: x - dragNode.x, y: y - dragNode.y };
-      }
-    });
-
-    canvas.addEventListener('mousemove', (e) => {
-      const rect = canvas.getBoundingClientRect();
-      const x = (e.clientX - rect.left - panX) / scale;
-      const y = (e.clientY - rect.top - panY) / scale;
-
-      if (isDragging && dragNode) {
-        dragNode.x = x - offset.x;
-        dragNode.y = y - offset.y;
-        dragNode.vx = 0;
-        dragNode.vy = 0;
-      }
-
-      // ホバー情報を表示
-      const hoveredNode = nodes.find(n => {
-        const dx = n.x - x;
-        const dy = n.y - y;
-        return Math.sqrt(dx * dx + dy * dy) < n.radius;
-      });
-
-      if (hoveredNode) {
-        showNodeInfo(hoveredNode);
-      } else {
-        hideNodeInfo();
-      }
-    });
-
-    canvas.addEventListener('mouseup', () => {
-      isDragging = false;
-      dragNode = null;
-    });
-
-    canvas.addEventListener('click', (e) => {
-      if (!isDragging) {
-        const rect = canvas.getBoundingClientRect();
-        const x = (e.clientX - rect.left - panX) / scale;
-        const y = (e.clientY - rect.top - panY) / scale;
-
-        const clickedNode = nodes.find(n => {
-          const dx = n.x - x;
-          const dy = n.y - y;
-          return Math.sqrt(dx * dx + dy * dy) < n.radius;
-        });
-
-        if (clickedNode) {
-          selectedNode = clickedNode;
-          vscode.postMessage({
-            command: 'openFile',
-            filePath: clickedNode.filePath,
-            line: 1
-          });
-        }
-      }
-    });
-
-    function showNodeInfo(node) {
-      const panel = document.getElementById('info-panel');
-      panel.innerHTML = \`
-        <div style="margin-bottom: 5px;"><strong>\${node.label}</strong></div>
-        <div style="color: var(--vscode-descriptionForeground); font-size: 11px;">
-          被依存数: \${node.incomingCount}<br>
-          依存数: \${node.outgoingCount}<br>
-          重要度: \${node.importance.toFixed(1)}
-        </div>
-      \`;
-      panel.classList.add('visible');
-    }
-
-    function hideNodeInfo() {
-      const panel = document.getElementById('info-panel');
-      panel.classList.remove('visible');
-    }
-
-    function focusNode(nodeId) {
-      const node = nodes.find(n => n.id === nodeId);
-      if (node) {
-        selectedNode = node;
-        panX = width / 2 - node.x * scale;
-        panY = height / 2 - node.y * scale;
-      }
-    }
-
-    function resetView() {
-      scale = 1;
-      panX = 0;
-      panY = 0;
-      selectedNode = null;
-    }
-
-    function zoomIn() {
-      scale *= 1.2;
-    }
-
-    function zoomOut() {
-      scale /= 1.2;
     }
 
     function showCircular() {
       vscode.postMessage({ command: 'showCircular' });
     }
-
-    // ウィンドウリサイズ対応
-    window.addEventListener('resize', () => {
-      width = canvas.parentElement.clientWidth;
-      height = canvas.parentElement.clientHeight;
-      canvas.width = width;
-      canvas.height = height;
-    });
-
-    animate();
   </script>
 </body>
 </html>`;
+  }
+
+  /**
+   * 重要度のバッジクラスを取得
+   */
+  private static getImportanceBadge(importance: number): string {
+    if (importance > 10) return 'badge-high';
+    if (importance > 5) return 'badge-medium';
+    return 'badge-low';
+  }
+
+  /**
+   * 重要度のラベルを取得
+   */
+  private static getImportanceLabel(importance: number): string {
+    if (importance > 10) return '重要度: 高';
+    if (importance > 5) return '重要度: 中';
+    return '重要度: 低';
   }
 
   /**
@@ -622,7 +297,7 @@ export class DependencyGraphPanel {
 
     const items = circularDeps.map((dep, index) => ({
       label: `循環 ${index + 1}: ${dep.length}ファイル`,
-      description: `重要度: ${dep.severity.toFixed(1)}`,
+      description: `重要度: ${dep.severity ? dep.severity.toFixed(1) : 'N/A'}`,
       detail: dep.path.map((p: string) => path.basename(p)).join(' → ')
     }));
 
