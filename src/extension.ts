@@ -15,6 +15,7 @@ import { DecorationStyles } from './decoration/DecorationStyles';
 import { FunctionDecorator } from './decoration/FunctionDecorator';
 import { BladeHoverProvider } from './blade/BladeHoverProvider';
 import { AnalyzeCodeFlowCommand } from './commands/AnalyzeCodeFlowCommand';
+import { RefactorCommand } from './commands/RefactorCommand';
 
 let aiService: AIServiceManager;
 let _phpParser: PhpParser;
@@ -216,6 +217,14 @@ function registerCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand('mireru.analyzeCodeFlow', async () => {
       await analyzeCodeFlowCommand.execute();
+    })
+  );
+
+  // リファクタリング提案
+  const refactorCommand = new RefactorCommand(aiService);
+  context.subscriptions.push(
+    vscode.commands.registerCommand('mireru.refactor', async () => {
+      await refactorCommand.execute();
     })
   );
 
