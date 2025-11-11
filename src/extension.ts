@@ -18,6 +18,9 @@ import { AnalyzeCodeFlowCommand } from './commands/AnalyzeCodeFlowCommand';
 import { RefactorCommand } from './commands/RefactorCommand';
 import { RouteTreeView } from './views/RouteTreeView';
 import { RouteDetailsPanel } from './views/RouteDetailsPanel';
+import { FileStructureTreeView } from './views/FileStructureTreeView';
+import { FileDetailsPanel } from './views/FileDetailsPanel';
+import { ProjectScanner } from './services/ProjectScanner';
 
 let aiService: AIServiceManager;
 let _phpParser: PhpParser;
@@ -29,6 +32,8 @@ let functionClassifier: FunctionClassifier;
 let decorationStyles: DecorationStyles;
 let functionDecorator: FunctionDecorator;
 let routeTreeView: RouteTreeView;
+let fileStructureTreeView: FileStructureTreeView;
+let projectScanner: ProjectScanner;
 
 /**
  * 拡張機能がアクティベートされたときに呼ばれる
@@ -69,6 +74,13 @@ export function activate(context: vscode.ExtensionContext) {
   // Laravel Route TreeViewの初期化
   routeTreeView = new RouteTreeView(context);
   routeTreeView.createTreeView();
+
+  // File Structure TreeViewの初期化
+  fileStructureTreeView = new FileStructureTreeView(context);
+  fileStructureTreeView.createTreeView();
+
+  // ProjectScannerの初期化
+  projectScanner = new ProjectScanner();
 
   // 設定変更を監視
   context.subscriptions.push(
@@ -224,6 +236,15 @@ function registerCommands(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('mireru.showRouteDetails', async (route) => {
       if (route) {
         RouteDetailsPanel.show(route, context);
+      }
+    })
+  );
+
+  // ファイル詳細を表示
+  context.subscriptions.push(
+    vscode.commands.registerCommand('mireru.showFileDetails', async (file) => {
+      if (file) {
+        FileDetailsPanel.show(file, context);
       }
     })
   );
@@ -477,9 +498,43 @@ async function handleShowUsagesCommand() {
  * プロジェクトマップ表示コマンドを処理
  */
 async function handleShowProjectMapCommand() {
-  vscode.window.showInformationMessage(
-    'この機能は実装中です (プロジェクトマップを表示)'
-  );
+  const workspaceFolders = vscode.workspace.workspaceFolders;
+  if (!workspaceFolders) {
+    vscode.window.showErrorMessage('ワークスペースが開かれていません');
+    return;
+  }
+
+  const rootPath = workspaceFolders[0].uri.fsPath;
+
+  try {
+    await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: 'Mireru: プロジェクト構造をスキャン中...',
+        cancellable: false
+      },
+      async (progress) => {
+        progress.report({ increment: 10, message: 'ディレクトリを走査中...' });
+
+        // プロジェクトをスキャン
+        const structure = await projectScanner.scanProject(rootPath);
+
+        progress.report({ increment: 80, message: 'ツリービューを更新中...' });
+
+        // TreeViewを更新
+        fileStructureTreeView.updateStructure(structure);
+
+        progress.report({ increment: 10, message: '完了！' });
+
+        vscode.window.showInformationMessage(
+          `プロジェクト構造をスキャンしました: ${structure.totalFiles}ファイル, ${structure.totalLines.toLocaleString()}行`
+        );
+      }
+    );
+  } catch (error) {
+    vscode.window.showErrorMessage(`プロジェクト構造のスキャンに失敗しました: ${error}`);
+    console.error('Project scan error:', error);
+  }
 }
 
 /**
