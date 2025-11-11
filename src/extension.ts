@@ -16,6 +16,8 @@ import { FunctionDecorator } from './decoration/FunctionDecorator';
 import { BladeHoverProvider } from './blade/BladeHoverProvider';
 import { AnalyzeCodeFlowCommand } from './commands/AnalyzeCodeFlowCommand';
 import { RefactorCommand } from './commands/RefactorCommand';
+import { RouteTreeView } from './views/RouteTreeView';
+import { RouteDetailsPanel } from './views/RouteDetailsPanel';
 
 let aiService: AIServiceManager;
 let _phpParser: PhpParser;
@@ -26,6 +28,7 @@ let functionDetector: FunctionDetector;
 let functionClassifier: FunctionClassifier;
 let decorationStyles: DecorationStyles;
 let functionDecorator: FunctionDecorator;
+let routeTreeView: RouteTreeView;
 
 /**
  * 拡張機能がアクティベートされたときに呼ばれる
@@ -62,6 +65,10 @@ export function activate(context: vscode.ExtensionContext) {
 
   // API設定を読み込み
   initializeAPIConfig();
+
+  // Laravel Route TreeViewの初期化
+  routeTreeView = new RouteTreeView(context);
+  routeTreeView.createTreeView();
 
   // 設定変更を監視
   context.subscriptions.push(
@@ -209,6 +216,15 @@ function registerCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand('mireru.showRoutes', async () => {
       await handleShowRoutesCommand();
+    })
+  );
+
+  // ルート詳細を表示
+  context.subscriptions.push(
+    vscode.commands.registerCommand('mireru.showRouteDetails', async (route) => {
+      if (route) {
+        RouteDetailsPanel.show(route, context);
+      }
     })
   );
 
@@ -520,17 +536,13 @@ async function handleShowRoutesCommand() {
 
         const allRoutes = [...routes, ...apiRoutes];
 
-        // 簡易的な表示（将来的にTreeViewで表示）
-        const routeList = allRoutes
-          .map(r => `${r.method} ${r.uri} → ${r.controller || ''}@${r.action || ''}`)
-          .join('\n');
+        // RouteTreeViewを更新
+        routeTreeView.updateRoutes(allRoutes);
 
-        const document = await vscode.workspace.openTextDocument({
-          content: `# Laravel Routes\n\n${routeList}`,
-          language: 'markdown'
-        });
-
-        await vscode.window.showTextDocument(document);
+        // TreeViewを表示
+        vscode.window.showInformationMessage(
+          `${allRoutes.length}個のルートが見つかりました。サイドバーの「Laravel Routes」ビューで確認できます。`
+        );
       }
     );
   } catch (error) {

@@ -2,6 +2,24 @@
 
 All notable changes to the "Mireru - AI Code Intelligence" extension will be documented in this file.
 
+## [0.8.4] - 2025-11-11
+
+### Added
+- **Laravelルート解析機能**
+  - routes/web.php と routes/api.php の全ルートを自動解析
+  - TreeView形式でルート一覧を表示（HTTPメソッドでグループ化）
+  - ルートをクリックして詳細情報を表示
+  - ルート詳細パネルで以下の情報を確認可能：
+    - HTTPメソッドとURI
+    - コントローラーとアクション
+    - ミドルウェア
+    - ルート名
+    - グループ情報（プレフィックス、名前空間）
+    - 定義場所へのジャンプ
+  - コントローラーファイルへの直接ジャンプ機能
+  - route()ヘルパーでの使用箇所を検索
+  - サイドバーに「Laravel Routes」ビューを追加
+
 ## [0.8.3] - 2025-11-11
 
 ### Added
