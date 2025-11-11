@@ -142,6 +142,11 @@ JSON形式で以下の構造で返してください：
   "originalCode": "改善前のコード（入力と同じ）",
   "improvedCode": "改善後のコード",
   "explanation": "なぜこのリファクタリングが必要かの詳細説明",
+  "stepByStepExplanation": [
+    "1行目: この処理の説明",
+    "2-5行目: この処理の説明",
+    "6行目: この処理の説明"
+  ],
   "benefits": [
     "メリット1: 説明",
     "メリット2: 説明"
@@ -179,6 +184,7 @@ JSON形式で以下の構造で返してください：
         originalCode: parsed.originalCode || '',
         improvedCode: parsed.improvedCode || '',
         explanation: parsed.explanation || '',
+        stepByStepExplanation: parsed.stepByStepExplanation || [],
         benefits: parsed.benefits || [],
         keyPoints: parsed.keyPoints || []
       };
@@ -192,6 +198,7 @@ JSON形式で以下の構造で返してください：
         originalCode: '',
         improvedCode: '',
         explanation: response,
+        stepByStepExplanation: [],
         benefits: [],
         keyPoints: []
       };
@@ -443,6 +450,17 @@ JSON形式で以下の構造で返してください：
     </div>
   </div>
 
+  ${refactoring.stepByStepExplanation.length > 0 ? `
+  <div class="section">
+    <h2>📝 改善後のコードの解説（一処理ずつ）</h2>
+    <ul class="issue-list">
+      ${refactoring.stepByStepExplanation.map(step => `
+        <li class="keypoint-item">${this.escapeHtml(step)}</li>
+      `).join('')}
+    </ul>
+  </div>
+  ` : ''}
+
   ${refactoring.benefits.length > 0 ? `
   <div class="section">
     <h2>✨ 改善のメリット</h2>
@@ -495,6 +513,7 @@ interface RefactoringResult {
   originalCode: string;
   improvedCode: string;
   explanation: string;
+  stepByStepExplanation: string[]; // 改善後のコードの一処理ずつの解説
   benefits: string[];
   keyPoints: string[];
 }

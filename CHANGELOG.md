@@ -2,6 +2,14 @@
 
 All notable changes to the "Mireru - AI Code Intelligence" extension will be documented in this file.
 
+## [0.8.3] - 2025-11-11
+
+### Added
+- **リファクタリング提案機能の改善**
+  - 改善後のコードの一処理ずつの詳細解説を追加
+  - 改善コードと改善のメリットの間に、各処理の意味と目的を説明するセクションを表示
+  - コードの理解をより深めるための段階的な説明を提供
+
 ## [0.8.2] - 2025-11-11
 
 ### Added
