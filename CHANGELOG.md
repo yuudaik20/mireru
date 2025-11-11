@@ -2,6 +2,34 @@
 
 All notable changes to the "Mireru - AI Code Intelligence" extension will be documented in this file.
 
+## [0.8.6] - 2025-11-11
+
+### Added
+- **依存関係グラフ機能**
+  - ファイル間・関数間・クラス間の依存関係を可視化
+  - インタラクティブなForce-directedグラフ表示：
+    - ノードのドラッグ＆ドロップ操作
+    - ズームイン/ズームアウト機能
+    - パン（移動）操作
+    - ノードクリックでファイルを開く
+  - 依存関係の種別検出：
+    - import/require文による依存
+    - 関数呼び出しによる依存
+    - クラス継承（extends）
+    - インターフェース実装（implements）
+    - トレイト使用（use trait）
+    - 型ヒントによる依存
+  - 依存関係の強度を3段階で表示（強・中・弱）
+  - 循環依存の自動検出と警告表示
+  - 統計情報の表示：
+    - 総ノード数、総依存関係数
+    - 最も依存されているファイル（Top 5）
+    - 最も多く依存しているファイル（Top 5）
+    - 循環依存の数
+  - ノードの重要度計算（被依存数ベース）
+  - 対応言語：PHP、TypeScript、JavaScript（.ts, .tsx, .js, .jsx, .php）
+  - node_modules、vendor等の自動除外
+
 ## [0.8.5] - 2025-11-11
 
 ### Added

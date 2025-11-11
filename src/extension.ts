@@ -21,6 +21,8 @@ import { RouteDetailsPanel } from './views/RouteDetailsPanel';
 import { FileStructureTreeView } from './views/FileStructureTreeView';
 import { FileDetailsPanel } from './views/FileDetailsPanel';
 import { ProjectScanner } from './services/ProjectScanner';
+import { DependencyGraphPanel } from './views/DependencyGraphPanel';
+import { DependencyAnalyzer } from './services/DependencyAnalyzer';
 
 let aiService: AIServiceManager;
 let _phpParser: PhpParser;
@@ -34,11 +36,14 @@ let functionDecorator: FunctionDecorator;
 let routeTreeView: RouteTreeView;
 let fileStructureTreeView: FileStructureTreeView;
 let projectScanner: ProjectScanner;
+let dependencyAnalyzer: DependencyAnalyzer;
+let extensionContext: vscode.ExtensionContext;
 
 /**
  * 拡張機能がアクティベートされたときに呼ばれる
  */
 export function activate(context: vscode.ExtensionContext) {
+  extensionContext = context;
   console.log('Mireru extension is now active!');
 
   // サービスの初期化
@@ -81,6 +86,9 @@ export function activate(context: vscode.ExtensionContext) {
 
   // ProjectScannerの初期化
   projectScanner = new ProjectScanner();
+
+  // DependencyAnalyzerの初期化
+  dependencyAnalyzer = new DependencyAnalyzer();
 
   // 設定変更を監視
   context.subscriptions.push(
@@ -541,9 +549,49 @@ async function handleShowProjectMapCommand() {
  * 依存関係グラフ表示コマンドを処理
  */
 async function handleShowDependencyGraphCommand() {
-  vscode.window.showInformationMessage(
-    'この機能は実装中です (依存関係グラフを表示)'
-  );
+  const workspaceFolders = vscode.workspace.workspaceFolders;
+  if (!workspaceFolders) {
+    vscode.window.showErrorMessage('ワークスペースが開かれていません');
+    return;
+  }
+
+  const rootPath = workspaceFolders[0].uri.fsPath;
+
+  try {
+    await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: 'Mireru: 依存関係を分析中...',
+        cancellable: false
+      },
+      async (progress) => {
+        progress.report({ increment: 10, message: 'ファイルを収集中...' });
+
+        // 依存関係を分析
+        const result = await dependencyAnalyzer.analyzeProject(rootPath, {
+          detectCircular: true
+        });
+
+        progress.report({ increment: 80, message: 'グラフを構築中...' });
+
+        // グラフパネルを表示
+        DependencyGraphPanel.show(result, extensionContext);
+
+        progress.report({ increment: 10, message: '完了！' });
+
+        const circularInfo = result.circularDependencies.length > 0
+          ? ` (${result.circularDependencies.length}個の循環依存を検出)`
+          : '';
+
+        vscode.window.showInformationMessage(
+          `依存関係を分析しました: ${result.graph.statistics.totalNodes}ノード, ${result.graph.statistics.totalEdges}依存関係${circularInfo}`
+        );
+      }
+    );
+  } catch (error) {
+    vscode.window.showErrorMessage(`依存関係の分析に失敗しました: ${error}`);
+    console.error('Dependency analysis error:', error);
+  }
 }
 
 /**

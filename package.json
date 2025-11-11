@@ -2,7 +2,7 @@
   "name": "mireru",
   "displayName": "Mireru - AI Code Intelligence",
   "description": "AI駆動のPHP/Laravelコードインテリジェンス拡張機能。コードの構造を「見える化」",
-  "version": "0.8.5",
+  "version": "0.8.6",
   "publisher": "mireru",
   "engines": {
     "vscode": "^1.85.0"
