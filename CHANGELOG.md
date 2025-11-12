@@ -2,6 +2,25 @@
 
 All notable changes to the "Mireru - AI Code Intelligence" extension will be documented in this file.
 
+## [0.8.9] - 2025-11-12
+
+### Changed
+- **Laravelルート解析を大幅に改善**: グループ化されたルート（prefix, name, controller）を正しく解析
+  - `Route::controller()->prefix()->name()->group()`パターンを完全サポート
+  - グループのprefixが正しくURIに適用される
+  - グループのnameプレフィックスがルート名に結合される（例：`'category.index'`）
+  - ネストされたグループもサポート
+
+### Added
+- **RouteDetailsPanelに必須アクションを追加**: すべてのルートで「定義に移動」「コントローラーを開く」「使用箇所を検索」を常に表示
+  - コントローラーやルート名がない場合は、無効化された状態で表示
+- **コントローラーファイルでの使用箇所検索機能**: コントローラーファイルで関数名を選択し、web.phpから対応するルート名を見つけてBladeファイルの使用箇所を検索
+  - `mireru.searchControllerActionUsages`コマンドを追加
+  - コントローラーファイルの右クリックメニューから実行可能
+
+### Fixed
+- ミドルウェアの型チェックを追加してエラーを防止
+
 ## [0.8.8] - 2025-11-11
 
 ### Changed

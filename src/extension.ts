@@ -4,6 +4,7 @@
  */
 
 import * as vscode from 'vscode';
+import * as path from 'path';
 import { AIServiceManager } from './ai/AIServiceManager';
 import { PhpParser } from './parser/PhpParser';
 import { LaravelAnalyzer } from './laravel/LaravelAnalyzer';
@@ -276,6 +277,13 @@ function registerCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand('mireru.refactor', async () => {
       await refactorCommand.execute();
+    })
+  );
+
+  // コントローラーアクションの使用箇所を検索
+  context.subscriptions.push(
+    vscode.commands.registerCommand('mireru.searchControllerActionUsages', async () => {
+      await handleSearchControllerActionUsagesCommand();
     })
   );
 
@@ -656,6 +664,126 @@ async function handleShowRoutesCommand() {
     );
   } catch (error) {
     vscode.window.showErrorMessage(`ルート情報の取得に失敗しました: ${error}`);
+  }
+}
+
+/**
+ * コントローラーアクションの使用箇所を検索
+ */
+async function handleSearchControllerActionUsagesCommand() {
+  const editor = vscode.window.activeTextEditor;
+  if (!editor) {
+    vscode.window.showErrorMessage('アクティブなエディタがありません');
+    return;
+  }
+
+  const workspaceFolders = vscode.workspace.workspaceFolders;
+  if (!workspaceFolders) {
+    vscode.window.showErrorMessage('ワークスペースが開かれていません');
+    return;
+  }
+
+  const rootPath = workspaceFolders[0].uri.fsPath;
+
+  // Laravelプロジェクトかチェック
+  const isLaravel = await laravelAnalyzer.detectLaravelProject(rootPath);
+  if (!isLaravel) {
+    vscode.window.showWarningMessage('Laravelプロジェクトが検出されませんでした');
+    return;
+  }
+
+  // 現在のファイルがコントローラーファイルかチェック
+  const filePath = editor.document.fileName;
+  if (!filePath.includes('Controller') || !filePath.endsWith('.php')) {
+    vscode.window.showWarningMessage('コントローラーファイルを開いてください');
+    return;
+  }
+
+  // カーソル位置の関数名を取得
+  const identifierInfo = getIdentifierAtCursor(editor.document, editor.selection.active);
+  if (!identifierInfo) {
+    vscode.window.showWarningMessage('カーソル位置に関数名が見つかりません');
+    return;
+  }
+
+  const actionName = identifierInfo.identifier;
+
+  // コントローラー名を取得（ファイル名から）
+  const controllerFileName = filePath.split(/[/\\]/).pop() || '';
+  const controllerName = controllerFileName.replace('.php', '');
+
+  try {
+    await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: `Mireru: ${controllerName}@${actionName} の使用箇所を検索中...`,
+        cancellable: false
+      },
+      async (progress) => {
+        progress.report({ message: 'web.phpからルートを検索中...' });
+
+        // web.phpから対応するルートを検索
+        const routes = await laravelAnalyzer.findRouteByControllerAction(rootPath, controllerName, actionName);
+
+        if (routes.length === 0) {
+          vscode.window.showInformationMessage(
+            `${controllerName}@${actionName} に対応するルートが見つかりませんでした`
+          );
+          return;
+        }
+
+        progress.report({ message: `${routes.length}個のルートが見つかりました。使用箇所を検索中...` });
+
+        // 各ルートのnameを使ってBladeファイルを検索
+        const allUsages: Array<{ file: string; line: number; content: string; usage: string; routeName: string }> = [];
+
+        for (const route of routes) {
+          if (route.name) {
+            const usages = await laravelAnalyzer.findRouteNameUsages(rootPath, route.name);
+            usages.forEach(usage => {
+              allUsages.push({
+                ...usage,
+                routeName: route.name!
+              });
+            });
+          }
+        }
+
+        progress.report({ message: `${allUsages.length}個の使用箇所が見つかりました` });
+
+        if (allUsages.length === 0) {
+          vscode.window.showInformationMessage(
+            `${controllerName}@${actionName} の使用箇所が見つかりませんでした（ルート名: ${routes.map(r => r.name).filter(Boolean).join(', ') || 'なし'}）`
+          );
+          return;
+        }
+
+        // QuickPickで使用箇所を表示
+        const items = allUsages.map(usage => ({
+          label: `$(file) ${path.basename(usage.file)}:${usage.line}`,
+          description: `${usage.routeName} - ${usage.usage}`,
+          detail: usage.content,
+          usage
+        }));
+
+        const selected = await vscode.window.showQuickPick(items, {
+          placeHolder: `${allUsages.length}個の使用箇所が見つかりました。選択してジャンプ`,
+          matchOnDescription: true,
+          matchOnDetail: true
+        });
+
+        if (selected) {
+          // 選択した箇所にジャンプ
+          const document = await vscode.workspace.openTextDocument(selected.usage.file);
+          const editor = await vscode.window.showTextDocument(document);
+          const position = new vscode.Position(selected.usage.line - 1, 0);
+          editor.selection = new vscode.Selection(position, position);
+          editor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenter);
+        }
+      }
+    );
+  } catch (error) {
+    vscode.window.showErrorMessage(`使用箇所の検索に失敗しました: ${error}`);
   }
 }
 

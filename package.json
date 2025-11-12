@@ -2,7 +2,7 @@
   "name": "mireru",
   "displayName": "Mireru - AI Code Intelligence",
   "description": "AI駆動のPHP/Laravelコードインテリジェンス拡張機能。コードの構造を「見える化」",
-  "version": "0.8.8",
+  "version": "0.8.9",
   "publisher": "mireru",
   "engines": {
     "vscode": "^1.85.0"
@@ -79,6 +79,10 @@
       {
         "command": "mireru.refactor",
         "title": "Mireru: リファクタリング提案"
+      },
+      {
+        "command": "mireru.searchControllerActionUsages",
+        "title": "Mireru: コントローラーアクションの使用箇所を検索"
       }
     ],
     "menus": {
@@ -127,6 +131,11 @@
           "command": "mireru.showRoutes",
           "when": "editorTextFocus",
           "group": "mireru@9"
+        },
+        {
+          "command": "mireru.searchControllerActionUsages",
+          "when": "editorTextFocus && editorLangId == php && resourcePath =~ /Controller/",
+          "group": "mireru@10"
         }
       ]
     },

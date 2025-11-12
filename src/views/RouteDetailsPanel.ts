@@ -241,8 +241,14 @@ export class RouteDetailsPanel {
       margin: 5px 5px 5px 0;
     }
 
-    .action-button:hover {
+    .action-button:hover:not(:disabled) {
       background: var(--vscode-button-hoverBackground);
+    }
+
+    .action-button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      background: var(--vscode-button-secondaryBackground);
     }
 
     code {
@@ -302,7 +308,7 @@ export class RouteDetailsPanel {
   </div>
   ` : ''}
 
-  ${route.middleware.length > 0 ? `
+  ${route.middleware && route.middleware.length > 0 ? `
   <div class="section">
     <h2>🛡️ ミドルウェア</h2>
     <div>
@@ -360,16 +366,12 @@ export class RouteDetailsPanel {
     <button class="action-button" onclick="jumpToDefinition()">
       📄 定義に移動
     </button>
-    ${route.controller ? `
-      <button class="action-button" onclick="jumpToController()">
-        📂 コントローラーを開く
-      </button>
-    ` : ''}
-    ${route.name ? `
-      <button class="action-button" onclick="searchRouteUsages()">
-        🔎 使用箇所を検索
-      </button>
-    ` : ''}
+    <button class="action-button" onclick="jumpToController()" ${!route.controller ? 'disabled title="コントローラーが定義されていません"' : ''}>
+      📂 コントローラーを開く
+    </button>
+    <button class="action-button" onclick="searchRouteUsages()" ${!route.name ? 'disabled title="ルート名が定義されていません"' : ''}>
+      🔎 使用箇所を検索
+    </button>
   </div>
 
   <script>

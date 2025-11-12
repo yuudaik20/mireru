@@ -77,23 +77,45 @@ export class LaravelAnalyzer {
   }
 
   /**
-   * ルート定義を抽出
+   * ルート定義を抽出（グループ化対応）
    */
   async extractRoutes(routeFilePath: string): Promise<RouteInfo[]> {
     const routes: RouteInfo[] = [];
 
     try {
       const code = await fs.promises.readFile(routeFilePath, 'utf-8');
-      // ASTパースは将来の機能で使用予定
-      const _ast = this.phpParser.parseCode(code, routeFilePath);
-
-      // シンプルなパターンマッチングでルートを抽出
       const lines = code.split('\n');
+
+      // グループスタック: ネストされたグループを追跡
+      interface GroupContext {
+        controller?: string;
+        prefix?: string;
+        namePrefix?: string;
+        middleware?: string[];
+      }
+      const groupStack: GroupContext[] = [];
+
       for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        const routeMatch = this.parseRouteLine(line, routeFilePath, i + 1);
-        if (routeMatch) {
-          routes.push(routeMatch);
+        const line = lines[i].trim();
+        const lineNumber = i + 1;
+
+        // グループ開始を検出
+        const groupMatch = this.parseRouteGroup(line);
+        if (groupMatch) {
+          groupStack.push(groupMatch);
+          continue;
+        }
+
+        // グループ終了を検出
+        if (line.includes('});') && groupStack.length > 0) {
+          groupStack.pop();
+          continue;
+        }
+
+        // ルート定義を解析
+        const routeInfo = this.parseRouteDefinition(line, routeFilePath, lineNumber, groupStack);
+        if (routeInfo) {
+          routes.push(routeInfo);
         }
       }
     } catch (error) {
@@ -104,50 +126,137 @@ export class LaravelAnalyzer {
   }
 
   /**
-   * ルート行をパース
+   * グループ定義を解析
    */
-  private parseRouteLine(line: string, filePath: string, lineNumber: number): RouteInfo | null {
-    // Route::get('/path', [Controller::class, 'method'])
+  private parseRouteGroup(line: string): { controller?: string; prefix?: string; namePrefix?: string; middleware?: string[] } | null {
+    // Route::controller(CategoryController::class)->prefix('category')->name('category.')->group(function () {
+    const groupPattern = /Route::(controller|prefix|name|middleware|group)/;
+    if (!groupPattern.test(line) || !line.includes('->group(')) {
+      return null;
+    }
+
+    const context: { controller?: string; prefix?: string; namePrefix?: string; middleware?: string[] } = {};
+
+    // controller を抽出
+    const controllerMatch = line.match(/->controller\s*\(\s*([^:]+)::class\s*\)/);
+    if (controllerMatch) {
+      context.controller = controllerMatch[1];
+    }
+
+    // prefix を抽出
+    const prefixMatch = line.match(/->prefix\s*\(\s*['"]([^'"]+)['"]\s*\)/);
+    if (prefixMatch) {
+      context.prefix = prefixMatch[1];
+    }
+
+    // name を抽出（プレフィックスとして保存）
+    const nameMatch = line.match(/->name\s*\(\s*['"]([^'"]+)['"]\s*\)/);
+    if (nameMatch) {
+      context.namePrefix = nameMatch[1];
+    }
+
+    // middleware を抽出
+    const middlewareMatch = line.match(/->middleware\s*\(\s*['"]([^'"]+)['"]\s*\)/);
+    if (middlewareMatch) {
+      context.middleware = [middlewareMatch[1]];
+    }
+
+    return context;
+  }
+
+  /**
+   * ルート定義を解析（グループコンテキストを適用）
+   */
+  private parseRouteDefinition(
+    line: string,
+    filePath: string,
+    lineNumber: number,
+    groupStack: Array<{ controller?: string; prefix?: string; namePrefix?: string; middleware?: string[] }>
+  ): RouteInfo | null {
+    // Route::get('/path', [Controller::class, 'method']) or Route::get('/', 'method')
     const routePattern = /Route::(get|post|put|patch|delete|any|match|resource)\s*\(\s*['"]([^'"]+)['"]/;
     const match = line.match(routePattern);
 
     if (!match) return null;
 
     const method = match[1].toUpperCase();
-    const uri = match[2];
+    let uri = match[2];
+
+    // グループスタックからコンテキストを取得
+    let controller: string | undefined;
+    let action: string | undefined;
+    const middleware: string[] = [];
+    let routeName: string | undefined;
+
+    // グループスタックからcontroller, prefix, namePrefix, middlewareを収集
+    let prefixParts: string[] = [];
+    let namePrefixParts: string[] = [];
+
+    for (const group of groupStack) {
+      if (group.controller && !controller) {
+        controller = group.controller;
+      }
+      if (group.prefix) {
+        prefixParts.push(group.prefix);
+      }
+      if (group.namePrefix) {
+        namePrefixParts.push(group.namePrefix);
+      }
+      if (group.middleware) {
+        middleware.push(...group.middleware);
+      }
+    }
+
+    // URIにプレフィックスを適用
+    if (prefixParts.length > 0) {
+      const prefix = prefixParts.join('/');
+      uri = uri === '/' ? prefix : `${prefix}/${uri}`.replace(/\/+/g, '/');
+    }
 
     // コントローラーとアクションを抽出
     const controllerPattern = /\[([^:]+)::class,\s*['"]([^'"]+)['"]\]/;
     const controllerMatch = line.match(controllerPattern);
 
-    let controller: string | undefined;
-    let action: string | undefined;
-
     if (controllerMatch) {
       controller = controllerMatch[1];
       action = controllerMatch[2];
     } else {
-      // 古い形式: 'Controller@method'
-      const oldPattern = /['"]([^@]+)@([^'"]+)['"]/;
-      const oldMatch = line.match(oldPattern);
-      if (oldMatch) {
-        controller = oldMatch[1];
-        action = oldMatch[2];
+      // グループのcontrollerを使用する形式: Route::get('/', 'method')
+      const methodPattern = /Route::[^(]+\([^,]+,\s*['"]([^'"]+)['"]/;
+      const methodMatch = line.match(methodPattern);
+      if (methodMatch) {
+        action = methodMatch[1];
+        // controller is already set from group context
+      } else {
+        // 古い形式: 'Controller@method'
+        const oldPattern = /['"]([^@]+)@([^'"]+)['"]/;
+        const oldMatch = line.match(oldPattern);
+        if (oldMatch) {
+          controller = oldMatch[1];
+          action = oldMatch[2];
+        }
       }
-    }
-
-    // ミドルウェアを抽出
-    const middleware: string[] = [];
-    const middlewarePattern = /->middleware\s*\(\s*['"]([^'"]+)['"]/;
-    const middlewareMatch = line.match(middlewarePattern);
-    if (middlewareMatch) {
-      middleware.push(middlewareMatch[1]);
     }
 
     // ルート名を抽出
     const namePattern = /->name\s*\(\s*['"]([^'"]+)['"]/;
     const nameMatch = line.match(namePattern);
-    const name = nameMatch?.[1];
+    if (nameMatch) {
+      routeName = nameMatch[1];
+    }
+
+    // グループのnamePrefixを適用
+    if (namePrefixParts.length > 0 && routeName) {
+      const namePrefix = namePrefixParts.join('');
+      routeName = `${namePrefix}${routeName}`;
+    }
+
+    // ミドルウェアを抽出（行レベル）
+    const middlewarePattern = /->middleware\s*\(\s*['"]([^'"]+)['"]/;
+    const middlewareMatch = line.match(middlewarePattern);
+    if (middlewareMatch) {
+      middleware.push(middlewareMatch[1]);
+    }
 
     return {
       method,
@@ -155,7 +264,7 @@ export class LaravelAnalyzer {
       controller,
       action,
       middleware,
-      name,
+      name: routeName,
       location: {
         file: filePath,
         startLine: lineNumber,
@@ -544,5 +653,41 @@ export class LaravelAnalyzer {
 
     await walk(rootPath);
     return files;
+  }
+
+  /**
+   * コントローラーとアクションからルートを検索
+   */
+  async findRouteByControllerAction(rootPath: string, controller: string, action: string): Promise<RouteInfo[]> {
+    const routes: RouteInfo[] = [];
+
+    try {
+      // routes/web.php と routes/api.php を検索
+      const routeFiles = [
+        path.join(rootPath, 'routes', 'web.php'),
+        path.join(rootPath, 'routes', 'api.php')
+      ];
+
+      for (const routeFile of routeFiles) {
+        if (fs.existsSync(routeFile)) {
+          const allRoutes = await this.extractRoutes(routeFile);
+
+          // コントローラーとアクションが一致するルートを検索
+          const matchingRoutes = allRoutes.filter(route => {
+            // コントローラー名の比較（クラス名のみで比較）
+            const routeController = route.controller?.split('\\').pop()?.replace('Controller', '');
+            const targetController = controller.split('\\').pop()?.replace('Controller', '');
+
+            return routeController === targetController && route.action === action;
+          });
+
+          routes.push(...matchingRoutes);
+        }
+      }
+    } catch (error) {
+      console.error(`Failed to find route for ${controller}@${action}:`, error);
+    }
+
+    return routes;
   }
 }
