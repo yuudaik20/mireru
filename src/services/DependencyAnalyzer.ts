@@ -33,6 +33,16 @@ export class DependencyAnalyzer {
     '**/coverage/**'
   ];
 
+  // Laravel専用の分析対象ディレクトリ
+  private laravelTargetDirectories: string[] = [
+    'resources/views',
+    'app/Repositories',
+    'app/Models',
+    'app/Http/Requests',
+    'app/Http/Controllers',
+    'app/Services'
+  ];
+
   /**
    * プロジェクト全体の依存関係を分析
    */
@@ -605,7 +615,38 @@ export class DependencyAnalyzer {
   ): Promise<string[]> {
     const files: string[] = [];
 
-    const walk = async (dir: string): Promise<void> => {
+    // Laravelプロジェクトかチェック
+    const isLaravel = await this.isLaravelProject(rootPath);
+
+    if (isLaravel) {
+      // Laravelプロジェクトの場合は特定ディレクトリのみを走査
+      console.log(`[DependencyAnalyzer] Laravel project detected. Scanning specific directories only.`);
+
+      for (const targetDir of this.laravelTargetDirectories) {
+        const fullTargetPath = path.join(rootPath, targetDir);
+
+        if (fs.existsSync(fullTargetPath)) {
+          console.log(`[DependencyAnalyzer] Scanning: ${targetDir}`);
+          await this.walkDirectory(fullTargetPath, rootPath, files);
+        }
+      }
+    } else {
+      // 通常のプロジェクトの場合は全体を走査
+      await this.walkDirectory(rootPath, rootPath, files);
+    }
+
+    return files;
+  }
+
+  /**
+   * ディレクトリを再帰的に走査
+   */
+  private async walkDirectory(
+    dir: string,
+    rootPath: string,
+    files: string[]
+  ): Promise<void> {
+    try {
       const entries = await fs.promises.readdir(dir, { withFileTypes: true });
 
       for (const entry of entries) {
@@ -616,18 +657,41 @@ export class DependencyAnalyzer {
         }
 
         if (entry.isDirectory()) {
-          await walk(fullPath);
+          await this.walkDirectory(fullPath, rootPath, files);
         } else if (entry.isFile()) {
           const ext = path.extname(entry.name).toLowerCase();
-          if (['.php', '.ts', '.tsx', '.js', '.jsx'].includes(ext)) {
+          if (['.php', '.ts', '.tsx', '.js', '.jsx', '.blade.php'].includes(ext) ||
+              entry.name.endsWith('.blade.php')) {
             files.push(fullPath);
           }
         }
       }
-    };
+    } catch (error) {
+      // ディレクトリアクセスエラーは無視
+      console.error(`[DependencyAnalyzer] Failed to read directory: ${dir}`, error);
+    }
+  }
 
-    await walk(rootPath);
-    return files;
+  /**
+   * Laravelプロジェクトかどうかを判定
+   */
+  private async isLaravelProject(rootPath: string): Promise<boolean> {
+    try {
+      const composerPath = path.join(rootPath, 'composer.json');
+      if (!fs.existsSync(composerPath)) {
+        return false;
+      }
+
+      const composerContent = await fs.promises.readFile(composerPath, 'utf-8');
+      const composer = JSON.parse(composerContent);
+
+      return !!(
+        composer.require?.['laravel/framework'] ||
+        composer['require-dev']?.['laravel/framework']
+      );
+    } catch {
+      return false;
+    }
   }
 
   /**

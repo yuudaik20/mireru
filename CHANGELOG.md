@@ -2,6 +2,24 @@
 
 All notable changes to the "Mireru - AI Code Intelligence" extension will be documented in this file.
 
+## [0.8.10] - 2025-11-12
+
+### Changed
+- **依存関係グラフの分析対象を最適化**: Laravelプロジェクトで重要なディレクトリのみを分析対象に
+  - 分析対象ディレクトリ：
+    - `resources/views/` - Bladeテンプレート
+    - `app/Repositories` - リポジトリ層
+    - `app/Models` - Eloquentモデル
+    - `app/Http/Requests` - フォームリクエスト
+    - `app/Http/Controllers` - コントローラー
+    - `app/Services` - サービス層
+  - これにより、より高速で関連性の高い依存関係のみを表示
+  - Laravelプロジェクト以外では従来通り全体を分析
+
+### Added
+- Laravelプロジェクト自動検出機能（composer.jsonを確認）
+- Blade テンプレートファイル（.blade.php）のサポート強化
+
 ## [0.8.9] - 2025-11-12
 
 ### Changed
