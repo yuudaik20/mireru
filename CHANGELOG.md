@@ -2,6 +2,32 @@
 
 All notable changes to the "Mireru - AI Code Intelligence" extension will be documented in this file.
 
+## [0.8.12] - 2025-11-13
+
+### Changed
+- **依存関係グラフのレイアウトを改善**: ノードが重ならないように間隔を広げて配置
+  - 最小水平間隔: 180px
+  - 最小垂直間隔: 100px
+  - パディング: 150px
+- **色分けをディレクトリベースに変更**: ファイルパスから所属ディレクトリを判定して色分け
+  - Views (resources/views): ピンク (#E91E63)
+  - Controllers (app/Http/Controllers): パープル (#9C27B0)
+  - Models (app/Models): インディゴ (#3F51B5)
+  - Services (app/Services): ブルー (#2196F3)
+  - Repositories (app/Repositories): シアン (#00BCD4)
+  - Requests (app/Http/Requests): グリーン (#4CAF50)
+  - その他: グレー (#9E9E9E)
+
+### Added
+- **ノード個別のドラッグ移動機能**: グラフ上のノードを自由にドラッグして配置変更可能
+  - マウスでノードをつかんで移動
+  - ドラッグ中は透明度が変わり視覚的フィードバック
+  - エッジがノードの移動に追従して再描画
+- **レジェンド表示の改善**: ディレクトリごとの色分けを凡例で確認可能
+
+### Fixed
+- グラフのパン操作とノードドラッグを区別して正しく動作するよう改善
+
 ## [0.8.11] - 2025-11-12
 
 ### Changed

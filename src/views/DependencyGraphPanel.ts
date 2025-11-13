@@ -221,7 +221,10 @@ export class DependencyGraphPanel {
       background-color: var(--vscode-button-hoverBackground);
     }
     .node {
-      cursor: pointer;
+      cursor: move;
+    }
+    .node.dragging {
+      opacity: 0.7;
     }
     .node rect {
       stroke: var(--vscode-panel-border);
@@ -241,6 +244,7 @@ export class DependencyGraphPanel {
       stroke-width: 1.5;
       fill: none;
       opacity: 0.6;
+      pointer-events: none;
     }
     .edge-arrow {
       fill: var(--vscode-textLink-foreground);
@@ -255,6 +259,8 @@ export class DependencyGraphPanel {
       border-radius: 3px;
       font-size: 11px;
       border: 1px solid var(--vscode-panel-border);
+      max-height: 300px;
+      overflow-y: auto;
     }
     .legend-item {
       display: flex;
@@ -289,16 +295,32 @@ export class DependencyGraphPanel {
       <svg id="graph-svg"></svg>
       <div class="legend">
         <div class="legend-item">
+          <div class="legend-color" style="background-color: #E91E63;"></div>
+          <span>Views</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-color" style="background-color: #9C27B0;"></div>
+          <span>Controllers</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-color" style="background-color: #3F51B5;"></div>
+          <span>Models</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-color" style="background-color: #2196F3;"></div>
+          <span>Services</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-color" style="background-color: #00BCD4;"></div>
+          <span>Repositories</span>
+        </div>
+        <div class="legend-item">
           <div class="legend-color" style="background-color: #4CAF50;"></div>
-          <span>低依存度</span>
+          <span>Requests</span>
         </div>
         <div class="legend-item">
-          <div class="legend-color" style="background-color: #FF9800;"></div>
-          <span>中依存度</span>
-        </div>
-        <div class="legend-item">
-          <div class="legend-color" style="background-color: #F44336;"></div>
-          <span>高依存度</span>
+          <div class="legend-color" style="background-color: #9E9E9E;"></div>
+          <span>その他</span>
         </div>
       </div>
     </div>
@@ -316,10 +338,49 @@ export class DependencyGraphPanel {
     let scale = 1;
     let translateX = 0;
     let translateY = 0;
-    let isDragging = false;
-    let dragStartX = 0;
-    let dragStartY = 0;
+    let isPanning = false;
+    let panStartX = 0;
+    let panStartY = 0;
     let selectedNodeId = null;
+
+    // ノード位置（ドラッグ可能にするためグローバル保持）
+    let nodePositions = {};
+
+    // ノードドラッグ用
+    let draggedNode = null;
+    let nodeDragStartX = 0;
+    let nodeDragStartY = 0;
+    let nodeDragOffsetX = 0;
+    let nodeDragOffsetY = 0;
+
+    // ディレクトリに基づく色分け
+    const DIRECTORY_COLORS = {
+      'resources/views': '#E91E63',
+      'app/Http/Controllers': '#9C27B0',
+      'app/Models': '#3F51B5',
+      'app/Services': '#2196F3',
+      'app/Repositories': '#00BCD4',
+      'app/Http/Requests': '#4CAF50',
+      'default': '#9E9E9E'
+    };
+
+    // ファイルパスからディレクトリタイプを判定
+    function getDirectoryType(filePath) {
+      if (!filePath) return 'default';
+
+      for (const [dirPattern, color] of Object.entries(DIRECTORY_COLORS)) {
+        if (dirPattern !== 'default' && filePath.includes(dirPattern)) {
+          return dirPattern;
+        }
+      }
+      return 'default';
+    }
+
+    // ノードの色を取得（ディレクトリベース）
+    function getNodeColor(node) {
+      const dirType = getDirectoryType(node.filePath);
+      return DIRECTORY_COLORS[dirType] || DIRECTORY_COLORS.default;
+    }
 
     // グラフを描画
     function renderGraph() {
@@ -327,8 +388,8 @@ export class DependencyGraphPanel {
       const width = svg.clientWidth;
       const height = svg.clientHeight;
 
-      // レイアウト計算（シンプルな階層レイアウト）
-      const layout = calculateLayout(graphData.nodes, graphData.edges, width, height);
+      // レイアウト計算（重ならないように間隔を広げる）
+      nodePositions = calculateLayout(graphData.nodes, graphData.edges, width, height);
 
       // SVG内容をクリア
       svg.innerHTML = '';
@@ -354,32 +415,30 @@ export class DependencyGraphPanel {
       defs.appendChild(marker);
       g.appendChild(defs);
 
-      // エッジを描画
-      graphData.edges.forEach(edge => {
-        const sourcePos = layout.nodePositions[edge.source];
-        const targetPos = layout.nodePositions[edge.target];
+      // エッジグループ
+      const edgeGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      edgeGroup.id = 'edge-group';
+      g.appendChild(edgeGroup);
 
-        if (sourcePos && targetPos) {
-          const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-          path.setAttribute('class', 'edge');
-          path.setAttribute('d', \`M \${sourcePos.x} \${sourcePos.y} L \${targetPos.x} \${targetPos.y}\`);
-          path.setAttribute('marker-end', 'url(#arrowhead)');
-          g.appendChild(path);
-        }
-      });
+      // ノードグループ
+      const nodeGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      nodeGroup.id = 'node-group';
+      g.appendChild(nodeGroup);
+
+      // エッジを描画
+      updateEdges();
 
       // ノードを描画
       graphData.nodes.forEach(node => {
-        const pos = layout.nodePositions[node.id];
+        const pos = nodePositions[node.id];
         if (!pos) return;
 
-        const nodeGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-        nodeGroup.setAttribute('class', 'node');
-        nodeGroup.setAttribute('data-id', node.id);
-        nodeGroup.style.cursor = 'pointer';
+        const nodeElem = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        nodeElem.setAttribute('class', 'node');
+        nodeElem.setAttribute('data-id', node.id);
 
-        // ノードの色（重要度に基づく）
-        const color = getNodeColor(node.importance);
+        // ノードの色（ディレクトリに基づく）
+        const color = getNodeColor(node);
 
         // 矩形
         const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
@@ -389,7 +448,7 @@ export class DependencyGraphPanel {
         rect.setAttribute('height', '40');
         rect.setAttribute('rx', '5');
         rect.setAttribute('fill', color);
-        nodeGroup.appendChild(rect);
+        nodeElem.appendChild(rect);
 
         // テキスト
         const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
@@ -397,30 +456,74 @@ export class DependencyGraphPanel {
         text.setAttribute('y', pos.y + 5);
         text.setAttribute('text-anchor', 'middle');
         text.textContent = node.label.length > 15 ? node.label.substring(0, 12) + '...' : node.label;
-        nodeGroup.appendChild(text);
+        nodeElem.appendChild(text);
 
         // クリックイベント
-        nodeGroup.addEventListener('click', () => selectNode(node));
+        nodeElem.addEventListener('click', (e) => {
+          if (!draggedNode) {
+            selectNode(node);
+          }
+        });
 
-        g.appendChild(nodeGroup);
+        // ドラッグイベント
+        nodeElem.addEventListener('mousedown', (e) => {
+          e.stopPropagation();
+          draggedNode = node.id;
+          nodeElem.classList.add('dragging');
+
+          const rect = svg.getBoundingClientRect();
+          const mouseX = (e.clientX - rect.left - translateX) / scale;
+          const mouseY = (e.clientY - rect.top - translateY) / scale;
+
+          nodeDragOffsetX = mouseX - pos.x;
+          nodeDragOffsetY = mouseY - pos.y;
+        });
+
+        nodeGroup.appendChild(nodeElem);
       });
 
       updateTransform();
     }
 
-    // シンプルな階層レイアウト
+    // エッジを更新（ノード移動時に呼ばれる）
+    function updateEdges() {
+      const edgeGroup = document.getElementById('edge-group');
+      if (!edgeGroup) return;
+
+      edgeGroup.innerHTML = '';
+
+      graphData.edges.forEach(edge => {
+        const sourcePos = nodePositions[edge.source];
+        const targetPos = nodePositions[edge.target];
+
+        if (sourcePos && targetPos) {
+          const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+          path.setAttribute('class', 'edge');
+          path.setAttribute('d', \`M \${sourcePos.x} \${sourcePos.y} L \${targetPos.x} \${targetPos.y}\`);
+          path.setAttribute('marker-end', 'url(#arrowhead)');
+          edgeGroup.appendChild(path);
+        }
+      });
+    }
+
+    // 改善されたレイアウトアルゴリズム（重ならないように）
     function calculateLayout(nodes, edges, width, height) {
-      const nodePositions = {};
-      const padding = 100;
+      const positions = {};
+      const padding = 150; // パディングを増やす
+      const nodeWidth = 120;
+      const nodeHeight = 40;
+      const minHorizontalGap = 180; // 最小水平間隔
+      const minVerticalGap = 100; // 最小垂直間隔
+
       const availableWidth = width - padding * 2;
       const availableHeight = height - padding * 2;
 
-      // 入次数を計算（依存されている数）
+      // 入次数を計算
       const inDegree = {};
       nodes.forEach(n => inDegree[n.id] = 0);
       edges.forEach(e => inDegree[e.target]++);
 
-      // レベル分け（トポロジカルソート風）
+      // トポロジカルソートでレベル分け
       const levels = [];
       const visited = new Set();
       const queue = nodes.filter(n => inDegree[n.id] === 0).map(n => n.id);
@@ -440,7 +543,6 @@ export class DependencyGraphPanel {
           visited.add(nodeId);
           level.push(nodeId);
 
-          // 子ノードをキューに追加
           edges.filter(e => e.source === nodeId).forEach(e => {
             if (!visited.has(e.target)) {
               queue.push(e.target);
@@ -452,30 +554,26 @@ export class DependencyGraphPanel {
           levels.push(level);
         }
 
-        if (levels.length > 20) break; // 安全策
+        if (levels.length > 20) break;
       }
 
-      // 位置を計算
-      const levelHeight = levels.length > 0 ? availableHeight / levels.length : 100;
-
+      // 位置を計算（重ならないように調整）
       levels.forEach((level, levelIndex) => {
-        const levelWidth = availableWidth / (level.length + 1);
+        const nodesInLevel = level.length;
+        const totalWidthNeeded = nodesInLevel * (nodeWidth + minHorizontalGap);
+        const levelWidth = Math.max(availableWidth, totalWidthNeeded) / (nodesInLevel + 1);
+
+        const y = padding + (availableHeight / (levels.length + 1)) * (levelIndex + 1);
+
         level.forEach((nodeId, index) => {
-          nodePositions[nodeId] = {
+          positions[nodeId] = {
             x: padding + levelWidth * (index + 1),
-            y: padding + levelHeight * (levelIndex + 0.5)
+            y: y
           };
         });
       });
 
-      return { nodePositions };
-    }
-
-    // ノードの色を取得
-    function getNodeColor(importance) {
-      if (importance > 10) return '#F44336';
-      if (importance > 5) return '#FF9800';
-      return '#4CAF50';
+      return positions;
     }
 
     // ノード選択
@@ -505,8 +603,12 @@ export class DependencyGraphPanel {
       const outgoing = graphData.edges.filter(e => e.source === node.id);
       const incoming = graphData.edges.filter(e => e.target === node.id);
 
+      const dirType = getDirectoryType(node.filePath);
+      const dirLabel = dirType !== 'default' ? dirType : 'その他';
+
       let html = \`
         <div style="margin-bottom: 20px;">
+          <p><strong>ディレクトリ:</strong> \${dirLabel}</p>
           <p><strong>ファイル:</strong> \${node.filePath || 'N/A'}</p>
           <p><strong>被依存:</strong> \${node.incomingCount} ファイル</p>
           <p><strong>依存:</strong> \${node.outgoingCount} ファイル</p>
@@ -573,30 +675,74 @@ export class DependencyGraphPanel {
       }
     }
 
-    // ドラッグ機能
+    // マウスイベント（パンとノードドラッグ）
     const svg = document.getElementById('graph-svg');
+
     svg.addEventListener('mousedown', (e) => {
-      if (e.target === svg || e.target.id === 'graph-group') {
-        isDragging = true;
-        dragStartX = e.clientX - translateX;
-        dragStartY = e.clientY - translateY;
+      if (!draggedNode && (e.target === svg || e.target.id === 'graph-group' || e.target.closest('.edge'))) {
+        isPanning = true;
+        panStartX = e.clientX - translateX;
+        panStartY = e.clientY - translateY;
+        svg.style.cursor = 'grabbing';
       }
     });
 
     svg.addEventListener('mousemove', (e) => {
-      if (isDragging) {
-        translateX = e.clientX - dragStartX;
-        translateY = e.clientY - dragStartY;
+      if (isPanning) {
+        // キャンバスパン
+        translateX = e.clientX - panStartX;
+        translateY = e.clientY - panStartY;
         updateTransform();
+      } else if (draggedNode) {
+        // ノードドラッグ
+        const rect = svg.getBoundingClientRect();
+        const mouseX = (e.clientX - rect.left - translateX) / scale;
+        const mouseY = (e.clientY - rect.top - translateY) / scale;
+
+        nodePositions[draggedNode] = {
+          x: mouseX - nodeDragOffsetX,
+          y: mouseY - nodeDragOffsetY
+        };
+
+        // ノードとエッジを更新
+        const nodeElem = document.querySelector(\`.node[data-id="\${draggedNode}"]\`);
+        if (nodeElem) {
+          const pos = nodePositions[draggedNode];
+          const rect = nodeElem.querySelector('rect');
+          const text = nodeElem.querySelector('text');
+
+          rect.setAttribute('x', pos.x - 60);
+          rect.setAttribute('y', pos.y - 20);
+          text.setAttribute('x', pos.x);
+          text.setAttribute('y', pos.y + 5);
+        }
+
+        updateEdges();
       }
     });
 
     svg.addEventListener('mouseup', () => {
-      isDragging = false;
+      if (draggedNode) {
+        const nodeElem = document.querySelector(\`.node[data-id="\${draggedNode}"]\`);
+        if (nodeElem) {
+          nodeElem.classList.remove('dragging');
+        }
+        draggedNode = null;
+      }
+      isPanning = false;
+      svg.style.cursor = 'grab';
     });
 
     svg.addEventListener('mouseleave', () => {
-      isDragging = false;
+      if (draggedNode) {
+        const nodeElem = document.querySelector(\`.node[data-id="\${draggedNode}"]\`);
+        if (nodeElem) {
+          nodeElem.classList.remove('dragging');
+        }
+        draggedNode = null;
+      }
+      isPanning = false;
+      svg.style.cursor = 'grab';
     });
 
     // 初期描画
