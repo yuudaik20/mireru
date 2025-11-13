@@ -506,14 +506,14 @@ export class DependencyGraphPanel {
       });
     }
 
-    // 改善されたレイアウトアルゴリズム（重ならないように）
+    // 改善されたレイアウトアルゴリズム（左上から密集配置）
     function calculateLayout(nodes, edges, width, height) {
       const positions = {};
-      const padding = 150; // パディングを増やす
+      const padding = 50; // パディングを小さく
       const nodeWidth = 120;
       const nodeHeight = 40;
-      const minHorizontalGap = 180; // 最小水平間隔
-      const minVerticalGap = 100; // 最小垂直間隔
+      const minHorizontalGap = 150; // 最小水平間隔
+      const minVerticalGap = 80; // 最小垂直間隔
 
       const availableWidth = width - padding * 2;
       const availableHeight = height - padding * 2;
@@ -557,19 +557,13 @@ export class DependencyGraphPanel {
         if (levels.length > 20) break;
       }
 
-      // 位置を計算（重ならないように調整）
+      // 位置を計算（左上から詰めて配置）
       levels.forEach((level, levelIndex) => {
-        const nodesInLevel = level.length;
-        const totalWidthNeeded = nodesInLevel * (nodeWidth + minHorizontalGap);
-        const levelWidth = Math.max(availableWidth, totalWidthNeeded) / (nodesInLevel + 1);
-
-        const y = padding + (availableHeight / (levels.length + 1)) * (levelIndex + 1);
+        const y = padding + (nodeHeight / 2) + (minVerticalGap + nodeHeight) * levelIndex;
 
         level.forEach((nodeId, index) => {
-          positions[nodeId] = {
-            x: padding + levelWidth * (index + 1),
-            y: y
-          };
+          const x = padding + (nodeWidth / 2) + (minHorizontalGap + nodeWidth) * index;
+          positions[nodeId] = { x, y };
         });
       });
 
