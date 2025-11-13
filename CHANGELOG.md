@@ -2,6 +2,25 @@
 
 All notable changes to the "Mireru - AI Code Intelligence" extension will be documented in this file.
 
+## [0.8.16] - 2025-11-13
+
+### Changed
+- **「使用箇所を検索」機能をHTTPメソッドに応じて最適化**: ルートのHTTPメソッドに応じて異なる検索動作を実行
+  - **GETメソッドの場合**: Bladeファイル内のroute()呼び出し箇所のみを表示
+    - Bladeファイル以外（コントローラー内のredirect()など）は除外
+    - より正確な使用箇所の特定が可能に
+  - **POST/DELETE/PATCHメソッドの場合**: 該当コントローラーの該当メソッドに直接ジャンプ
+    - コントローラー情報がない場合は、ルート名から自動推測
+    - フォーム送信先の実装を素早く確認可能
+
+### Added
+- RouteDetailsPanel.searchBladeUsages()メソッド: Bladeファイル内の使用箇所を検索
+- RouteDetailsPanel.showControllerMethod()メソッド: コントローラーメソッドを表示
+
+### Improved
+- ルート詳細パネルの使用箇所検索機能のユーザビリティ向上
+- HTTPメソッドの特性を考慮したスマートな検索動作
+
 ## [0.8.15] - 2025-11-13
 
 ### Added

@@ -43,7 +43,7 @@ export class RouteDetailsPanel {
             break;
           case 'searchRouteUsages':
             if (route.name) {
-              await this.searchRouteUsages(route.name);
+              await this.searchRouteUsages(route);
             }
             break;
         }
@@ -158,19 +158,43 @@ export class RouteDetailsPanel {
 
   /**
    * ルート使用箇所を検索
+   * GETメソッド: Bladeファイル内のroute()呼び出しを表示
+   * POST/DELETE/PATCH等: コントローラーの該当メソッドを表示
    */
-  private static async searchRouteUsages(routeName: string): Promise<void> {
+  private static async searchRouteUsages(route: RouteInfo): Promise<void> {
+    try {
+      const httpMethod = route.method.toUpperCase();
+
+      if (httpMethod === 'GET') {
+        // GETメソッドの場合: Bladeファイル内のroute()呼び出しを検索
+        await this.searchBladeUsages(route.name!);
+      } else {
+        // POST/DELETE/PATCH等の場合: コントローラーの該当メソッドを表示
+        await this.showControllerMethod(route);
+      }
+    } catch (error) {
+      vscode.window.showErrorMessage(`ルート名の使用箇所検索に失敗しました: ${error}`);
+    }
+  }
+
+  /**
+   * Bladeファイル内のルート名使用箇所を検索
+   */
+  private static async searchBladeUsages(routeName: string): Promise<void> {
     try {
       // LaravelAnalyzerを使ってルート名の使用箇所を検索
-      const usages = await this.laravelAnalyzer.findRouteNameUsages(this.rootPath, routeName);
+      const allUsages = await this.laravelAnalyzer.findRouteNameUsages(this.rootPath, routeName);
 
-      if (usages.length === 0) {
-        vscode.window.showInformationMessage(`ルート名 '${routeName}' の使用箇所が見つかりませんでした`);
+      // Bladeファイルのみをフィルタリング
+      const bladeUsages = allUsages.filter(usage => usage.file.endsWith('.blade.php'));
+
+      if (bladeUsages.length === 0) {
+        vscode.window.showInformationMessage(`ルート名 '${routeName}' がBladeファイルで使用されている箇所が見つかりませんでした`);
         return;
       }
 
       // QuickPickで使用箇所を表示
-      const items = usages.map(usage => ({
+      const items = bladeUsages.map(usage => ({
         label: `$(file) ${path.basename(usage.file)}:${usage.line}`,
         description: usage.usage,
         detail: usage.content,
@@ -178,7 +202,7 @@ export class RouteDetailsPanel {
       }));
 
       const selected = await vscode.window.showQuickPick(items, {
-        placeHolder: `${usages.length}個の使用箇所が見つかりました。選択してジャンプ`,
+        placeHolder: `${bladeUsages.length}個のBladeファイルで使用されています。選択してジャンプ`,
         matchOnDescription: true,
         matchOnDetail: true
       });
@@ -192,7 +216,58 @@ export class RouteDetailsPanel {
         editor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenter);
       }
     } catch (error) {
-      vscode.window.showErrorMessage(`ルート名の使用箇所検索に失敗しました: ${error}`);
+      vscode.window.showErrorMessage(`Bladeファイルの検索に失敗しました: ${error}`);
+    }
+  }
+
+  /**
+   * コントローラーの該当メソッドを表示
+   */
+  private static async showControllerMethod(route: RouteInfo): Promise<void> {
+    try {
+      let controllerName: string | undefined = route.controller;
+      let methodName: string | undefined = route.action;
+
+      // route.controllerがない場合、route.nameから推測
+      if (!controllerName && route.name) {
+        const inferred = this.laravelAnalyzer.inferControllerFromRouteName(route.name);
+        if (inferred) {
+          controllerName = inferred.controller;
+          methodName = inferred.method;
+        }
+      }
+
+      if (!controllerName || !methodName) {
+        vscode.window.showWarningMessage('コントローラー情報が取得できませんでした');
+        return;
+      }
+
+      // コントローラーファイルを検索
+      const controllerPath = await this.laravelAnalyzer.findControllerFile(this.rootPath, controllerName);
+
+      if (!controllerPath) {
+        vscode.window.showWarningMessage(`コントローラーが見つかりませんでした: ${controllerName}`);
+        return;
+      }
+
+      // メソッドの行番号を検索
+      const lineNumber = await this.laravelAnalyzer.findMethodLineInController(controllerPath, methodName);
+
+      if (!lineNumber) {
+        vscode.window.showWarningMessage(`メソッド ${methodName} が見つかりませんでした`);
+        return;
+      }
+
+      // ファイルを開いてメソッドにジャンプ
+      const document = await vscode.workspace.openTextDocument(controllerPath);
+      const editor = await vscode.window.showTextDocument(document);
+      const position = new vscode.Position(lineNumber - 1, 0);
+      editor.selection = new vscode.Selection(position, position);
+      editor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenter);
+
+      vscode.window.showInformationMessage(`コントローラーメソッド: ${controllerName}::${methodName}()`);
+    } catch (error) {
+      vscode.window.showErrorMessage(`コントローラーメソッドの表示に失敗しました: ${error}`);
     }
   }
 
