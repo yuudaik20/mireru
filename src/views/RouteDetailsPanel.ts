@@ -39,9 +39,7 @@ export class RouteDetailsPanel {
             await this.jumpToLocation(route.location);
             break;
           case 'jumpToController':
-            if (route.controller) {
-              await this.jumpToController(route.controller, route.action);
-            }
+            await this.jumpToControllerFromRoute(route);
             break;
           case 'searchRouteUsages':
             if (route.name) {
@@ -69,7 +67,56 @@ export class RouteDetailsPanel {
   }
 
   /**
-   * コントローラーにジャンプ
+   * ルート情報からコントローラーにジャンプ
+   */
+  private static async jumpToControllerFromRoute(route: RouteInfo): Promise<void> {
+    try {
+      let controllerName: string | undefined = route.controller;
+      let methodName: string | undefined = route.action;
+
+      // route.controllerがない場合、route.nameから推測
+      if (!controllerName && route.name) {
+        const inferred = this.laravelAnalyzer.inferControllerFromRouteName(route.name);
+        if (inferred) {
+          controllerName = inferred.controller;
+          methodName = inferred.method;
+          console.log(`Inferred controller from route name: ${controllerName}@${methodName}`);
+        }
+      }
+
+      if (!controllerName) {
+        vscode.window.showWarningMessage('コントローラー情報が取得できませんでした');
+        return;
+      }
+
+      // コントローラーファイルを検索
+      const controllerPath = await this.laravelAnalyzer.findControllerFile(this.rootPath, controllerName);
+
+      if (!controllerPath) {
+        vscode.window.showWarningMessage(`コントローラーが見つかりませんでした: ${controllerName}`);
+        return;
+      }
+
+      // ファイルを開く
+      const document = await vscode.workspace.openTextDocument(controllerPath);
+      const editor = await vscode.window.showTextDocument(document);
+
+      // メソッドの行番号を検索
+      if (methodName) {
+        const lineNumber = await this.laravelAnalyzer.findMethodLineInController(controllerPath, methodName);
+        if (lineNumber) {
+          const position = new vscode.Position(lineNumber - 1, 0);
+          editor.selection = new vscode.Selection(position, position);
+          editor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenter);
+        }
+      }
+    } catch (error) {
+      vscode.window.showErrorMessage(`コントローラーを開けませんでした: ${error}`);
+    }
+  }
+
+  /**
+   * コントローラーにジャンプ（旧メソッド、互換性のため残す）
    */
   private static async jumpToController(controller: string, action?: string): Promise<void> {
     try {
@@ -366,7 +413,7 @@ export class RouteDetailsPanel {
     <button class="action-button" onclick="jumpToDefinition()">
       📄 定義に移動
     </button>
-    <button class="action-button" onclick="jumpToController()" ${!route.controller ? 'disabled title="コントローラーが定義されていません"' : ''}>
+    <button class="action-button" onclick="jumpToController()" ${!route.controller && !route.name ? 'disabled title="コントローラー情報が不足しています"' : ''}>
       📂 コントローラーを開く
     </button>
     <button class="action-button" onclick="searchRouteUsages()" ${!route.name ? 'disabled title="ルート名が定義されていません"' : ''}>

@@ -20,6 +20,7 @@ import {
   CircularDependency
 } from '../types/dependency';
 import { Location } from '../types/common';
+import { LaravelAnalyzer } from '../laravel/LaravelAnalyzer';
 
 export class DependencyAnalyzer {
   private excludePatterns: string[] = [
@@ -105,6 +106,7 @@ export class DependencyAnalyzer {
   }> {
     const content = await fs.promises.readFile(filePath, 'utf-8');
     const ext = path.extname(filePath).toLowerCase();
+    const isBladeFile = filePath.endsWith('.blade.php');
 
     const fileDeps: FileDependency[] = [];
     const functionDeps: FunctionDependency[] = [];
@@ -115,6 +117,11 @@ export class DependencyAnalyzer {
       this.analyzePHPFile(content, filePath, rootPath, fileDeps, classDeps);
     } else if (ext === '.ts' || ext === '.tsx' || ext === '.js' || ext === '.jsx') {
       this.analyzeTypeScriptFile(content, filePath, rootPath, fileDeps, classDeps);
+    }
+
+    // Bladeファイルの場合、route()呼び出しを解析してController依存関係を追加
+    if (isBladeFile) {
+      await this.analyzeBladeRoutes(content, filePath, rootPath, fileDeps);
     }
 
     return { fileDeps, functionDeps, classDeps };
@@ -386,6 +393,91 @@ export class DependencyAnalyzer {
           type: DependencyType.Implements,
           strength: DependencyStrength.Strong
         });
+      }
+    }
+  }
+
+  /**
+   * Bladeファイル内のroute()呼び出しを解析してController依存関係を追加
+   */
+  private async analyzeBladeRoutes(
+    content: string,
+    bladeFilePath: string,
+    rootPath: string,
+    fileDeps: FileDependency[]
+  ): Promise<void> {
+    // route()呼び出しのパターンを検出
+    // {{ route('name') }}, {!! route('name') !!}, route('name'), @php route('name') @endphp など
+    const routePatterns = [
+      /\{\{\s*route\(['"]([^'"]+)['"]\s*(?:,\s*[^\)]+)?\)\s*\}\}/g,  // {{ route('name') }}
+      /\{!!\s*route\(['"]([^'"]+)['"]\s*(?:,\s*[^\)]+)?\)\s*!!\}/g,  // {!! route('name') !!}
+      /route\(['"]([^'"]+)['"]\s*(?:,\s*[^\)]+)?\)/g                  // route('name')
+    ];
+
+    const routeNames = new Set<string>();
+    const routeLocations = new Map<string, Location[]>();
+
+    // すべてのパターンでマッチング
+    for (const pattern of routePatterns) {
+      let match;
+      while ((match = pattern.exec(content)) !== null) {
+        const routeName = match[1];
+        const lineNumber = content.substring(0, match.index).split('\n').length;
+
+        routeNames.add(routeName);
+
+        if (!routeLocations.has(routeName)) {
+          routeLocations.set(routeName, []);
+        }
+
+        routeLocations.get(routeName)!.push({
+          file: bladeFilePath,
+          startLine: lineNumber,
+          endLine: lineNumber,
+          startColumn: match.index - content.lastIndexOf('\n', match.index) - 1,
+          endColumn: match.index - content.lastIndexOf('\n', match.index) - 1 + match[0].length
+        });
+      }
+    }
+
+    if (routeNames.size === 0) {
+      return;
+    }
+
+    // LaravelAnalyzerをインスタンス化
+    const analyzer = new LaravelAnalyzer();
+
+    // 各ルート名について依存関係を追加
+    for (const routeName of routeNames) {
+      try {
+        // ルート名からコントローラー/メソッドを推測
+        const inferred = analyzer.inferControllerFromRouteName(routeName);
+        if (!inferred) {
+          continue;
+        }
+
+        // コントローラーファイルを検索
+        const controllerPath = await analyzer.findControllerFile(rootPath, inferred.controller);
+        if (!controllerPath) {
+          continue;
+        }
+
+        // メソッドの行番号を取得
+        const lineNumber = await analyzer.findMethodLineInController(controllerPath, inferred.method);
+
+        // 依存関係を追加
+        fileDeps.push({
+          from: bladeFilePath,
+          to: controllerPath,
+          type: DependencyType.FunctionCall,
+          strength: DependencyStrength.Medium,
+          locations: routeLocations.get(routeName) || [],
+          references: [`${routeName} → ${inferred.controller}::${inferred.method}()`]
+        });
+
+        console.log(`[DependencyAnalyzer] Added Blade → Controller dependency: ${path.basename(bladeFilePath)} → ${path.basename(controllerPath)} (${routeName})`);
+      } catch (error) {
+        console.error(`[DependencyAnalyzer] Failed to analyze route ${routeName}:`, error);
       }
     }
   }

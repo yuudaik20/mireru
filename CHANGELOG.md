@@ -2,6 +2,32 @@
 
 All notable changes to the "Mireru - AI Code Intelligence" extension will be documented in this file.
 
+## [0.8.15] - 2025-11-13
+
+### Added
+- **ルート名からコントローラー/メソッドを自動推測**: ルート名（例: "category.showCreateConfirm"）からコントローラー（CategoryController）とメソッド（showCreateConfirm）を自動推測
+  - LaravelAnalyzer.inferControllerFromRouteName()メソッドを追加
+  - LaravelAnalyzer.findControllerFile()メソッドを追加（再帰的にコントローラーファイルを検索）
+  - LaravelAnalyzer.findMethodLineInController()メソッドを追加（メソッドの正確な行番号を取得）
+
+### Changed
+- **すべてのルートで「コントローラーを開く」が使用可能に**: ルート定義にコントローラー情報がない場合でも、ルート名から推測して開けるように改善
+  - RouteDetailsPanel.jumpToControllerFromRoute()メソッドを実装
+  - コントローラー情報がない場合は自動的にルート名から推測
+  - ボタンの無効化条件を変更：route.controllerまたはroute.nameがあれば有効化
+
+- **依存関係グラフにBlade → Controller依存関係を追加**: Bladeファイルがどのコントローラーに依存しているかを可視化
+  - Bladeファイル内のroute()ヘルパー呼び出しを解析
+  - 検出パターン：`{{ route('name') }}`、`{!! route('name') !!}`、`route('name')`
+  - ルート名から対応するコントローラーを自動解決
+  - 依存関係グラフにBlade → Controller のエッジを追加
+  - 各エッジに使用箇所の正確な位置情報を含む
+  - クリックで該当箇所にジャンプ可能
+
+### Improved
+- ルート詳細パネルのコントローラージャンプ機能の精度向上
+- Laravelプロジェクトでの依存関係解析の精度向上
+
 ## [0.8.14] - 2025-11-13
 
 ### Changed

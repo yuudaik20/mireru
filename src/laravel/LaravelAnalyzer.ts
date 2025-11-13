@@ -690,4 +690,90 @@ export class LaravelAnalyzer {
 
     return routes;
   }
+
+  /**
+   * ルート名からコントローラーとメソッドを推測
+   * 例: "category.showCreateConfirm" → { controller: "Category", method: "showCreateConfirm" }
+   */
+  inferControllerFromRouteName(routeName: string): { controller: string; method: string } | null {
+    if (!routeName || !routeName.includes('.')) {
+      return null;
+    }
+
+    const parts = routeName.split('.');
+    if (parts.length < 2) {
+      return null;
+    }
+
+    // 最初の部分をコントローラー名として使用（先頭を大文字に）
+    const controllerBase = parts[0].charAt(0).toUpperCase() + parts[0].slice(1);
+    const controller = `${controllerBase}Controller`;
+
+    // 残りの部分をメソッド名として結合
+    const method = parts.slice(1).join('');
+
+    return { controller, method };
+  }
+
+  /**
+   * コントローラーファイルを検索
+   */
+  async findControllerFile(rootPath: string, controllerName: string): Promise<string | null> {
+    try {
+      // app/Http/Controllers ディレクトリを検索
+      const controllersDir = path.join(rootPath, 'app', 'Http', 'Controllers');
+
+      if (!fs.existsSync(controllersDir)) {
+        return null;
+      }
+
+      // 再帰的にコントローラーファイルを検索
+      const findFile = async (dir: string): Promise<string | null> => {
+        const entries = await fs.promises.readdir(dir, { withFileTypes: true });
+
+        for (const entry of entries) {
+          const fullPath = path.join(dir, entry.name);
+
+          if (entry.isDirectory()) {
+            const result = await findFile(fullPath);
+            if (result) return result;
+          } else if (entry.isFile() && entry.name === `${controllerName}.php`) {
+            return fullPath;
+          }
+        }
+
+        return null;
+      };
+
+      return await findFile(controllersDir);
+    } catch (error) {
+      console.error(`Failed to find controller ${controllerName}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * コントローラーファイル内の特定のメソッドの行番号を取得
+   */
+  async findMethodLineInController(controllerPath: string, methodName: string): Promise<number | null> {
+    try {
+      const content = await fs.promises.readFile(controllerPath, 'utf-8');
+      const lines = content.split('\n');
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        // メソッド定義を検索: public function methodName(
+        const methodPattern = new RegExp(`\\b(public|protected|private)\\s+function\\s+${methodName}\\s*\\(`);
+        if (methodPattern.test(line)) {
+          return i + 1;
+        }
+      }
+
+      return null;
+    } catch (error) {
+      console.error(`Failed to find method ${methodName} in ${controllerPath}:`, error);
+      return null;
+    }
+  }
 }
+
