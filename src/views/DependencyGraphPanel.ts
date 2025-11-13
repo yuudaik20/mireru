@@ -506,25 +506,26 @@ export class DependencyGraphPanel {
       });
     }
 
-    // 改善されたレイアウトアルゴリズム（左上から密集配置）
+    // 改善されたレイアウトアルゴリズム（グリッド配置で1画面に収める）
     function calculateLayout(nodes, edges, width, height) {
       const positions = {};
-      const padding = 50; // パディングを小さく
+      const padding = 50;
       const nodeWidth = 120;
       const nodeHeight = 40;
-      const minHorizontalGap = 150; // 最小水平間隔
-      const minVerticalGap = 80; // 最小垂直間隔
+      const minHorizontalGap = 150;
+      const minVerticalGap = 80;
 
+      // 1行に配置する最大ノード数（画面幅に応じて調整）
       const availableWidth = width - padding * 2;
-      const availableHeight = height - padding * 2;
+      const maxNodesPerRow = Math.max(3, Math.floor(availableWidth / (nodeWidth + minHorizontalGap)));
 
       // 入次数を計算
       const inDegree = {};
       nodes.forEach(n => inDegree[n.id] = 0);
       edges.forEach(e => inDegree[e.target]++);
 
-      // トポロジカルソートでレベル分け
-      const levels = [];
+      // トポロジカルソートでノードを順序付け
+      const sortedNodes = [];
       const visited = new Set();
       const queue = nodes.filter(n => inDegree[n.id] === 0).map(n => n.id);
 
@@ -533,38 +534,30 @@ export class DependencyGraphPanel {
       }
 
       while (queue.length > 0 || visited.size < nodes.length) {
-        const level = [];
-        const currentSize = queue.length || 1;
+        const nodeId = queue.shift() || nodes.find(n => !visited.has(n.id))?.id;
+        if (!nodeId || visited.has(nodeId)) continue;
 
-        for (let i = 0; i < currentSize; i++) {
-          const nodeId = queue.shift() || nodes.find(n => !visited.has(n.id))?.id;
-          if (!nodeId || visited.has(nodeId)) continue;
+        visited.add(nodeId);
+        sortedNodes.push(nodeId);
 
-          visited.add(nodeId);
-          level.push(nodeId);
+        edges.filter(e => e.source === nodeId).forEach(e => {
+          if (!visited.has(e.target)) {
+            queue.push(e.target);
+          }
+        });
 
-          edges.filter(e => e.source === nodeId).forEach(e => {
-            if (!visited.has(e.target)) {
-              queue.push(e.target);
-            }
-          });
-        }
-
-        if (level.length > 0) {
-          levels.push(level);
-        }
-
-        if (levels.length > 20) break;
+        if (sortedNodes.length > 100) break; // 安全策
       }
 
-      // 位置を計算（左上から詰めて配置）
-      levels.forEach((level, levelIndex) => {
-        const y = padding + (nodeHeight / 2) + (minVerticalGap + nodeHeight) * levelIndex;
+      // グリッド配置（1行maxNodesPerRow個まで、それ以上は次の行へ）
+      sortedNodes.forEach((nodeId, index) => {
+        const row = Math.floor(index / maxNodesPerRow);
+        const col = index % maxNodesPerRow;
 
-        level.forEach((nodeId, index) => {
-          const x = padding + (nodeWidth / 2) + (minHorizontalGap + nodeWidth) * index;
-          positions[nodeId] = { x, y };
-        });
+        const x = padding + (nodeWidth / 2) + col * (nodeWidth + minHorizontalGap);
+        const y = padding + (nodeHeight / 2) + row * (nodeHeight + minVerticalGap);
+
+        positions[nodeId] = { x, y };
       });
 
       return positions;
