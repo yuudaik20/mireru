@@ -5,13 +5,26 @@
 
 import * as vscode from 'vscode';
 import * as path from 'path';
+import * as fs from 'fs';
 import { DependencyAnalysisResult, FileDependency } from '../types/dependency';
 
 export class DependencyGraphPanel {
+  private static readonly GRAPH_STATE_FILE = '.mireru-graph-state.json';
+  private static currentPanel: vscode.WebviewPanel | undefined;
+  private static currentResult: DependencyAnalysisResult | undefined;
+  private static currentContext: vscode.ExtensionContext | undefined;
+
   /**
    * 依存関係グラフパネルを表示
    */
-  static show(result: DependencyAnalysisResult, context: vscode.ExtensionContext): void {
+  static async show(result: DependencyAnalysisResult, context: vscode.ExtensionContext): Promise<void> {
+    this.currentResult = result;
+    this.currentContext = context;
+
+    // 保存された状態を読み込み
+    const savedState = await this.loadGraphState(result.rootPath);
+    const isFirstTime = !savedState;
+
     const panel = vscode.window.createWebviewPanel(
       'mireruDependencyGraph',
       `依存関係: ${path.basename(result.rootPath)}`,
@@ -22,9 +35,16 @@ export class DependencyGraphPanel {
       }
     );
 
+    this.currentPanel = panel;
+
+    // パネルが閉じられたときのハンドラ
+    panel.onDidDispose(() => {
+      this.currentPanel = undefined;
+    });
+
     // データをJSON化して渡す
     const graphData = this.prepareGraphData(result);
-    panel.webview.html = this.getHtmlContent(result, graphData);
+    panel.webview.html = this.getHtmlContent(result, graphData, isFirstTime, savedState);
 
     // Webviewからのメッセージを処理
     panel.webview.onDidReceiveMessage(
@@ -35,6 +55,13 @@ export class DependencyGraphPanel {
             break;
           case 'showCircular':
             await this.showCircularDependencies(result.circularDependencies);
+            break;
+          case 'saveState':
+            await this.saveGraphState(result.rootPath, message.nodePositions);
+            vscode.window.showInformationMessage('グラフの状態を保存しました');
+            break;
+          case 'refresh':
+            await this.refreshGraph();
             break;
         }
       },
@@ -88,9 +115,86 @@ export class DependencyGraphPanel {
   }
 
   /**
+   * グラフを再生成
+   */
+  private static async refreshGraph(): Promise<void> {
+    if (!this.currentResult || !this.currentContext || !this.currentPanel) {
+      return;
+    }
+
+    // DependencyAnalyzerを使って再スキャン
+    const { DependencyAnalyzer } = require('../services/DependencyAnalyzer');
+    const { ProjectScanner } = require('../services/ProjectScanner');
+
+    const scanner = new ProjectScanner();
+    const analyzer = new DependencyAnalyzer();
+
+    try {
+      await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: '依存関係を再スキャン中...',
+          cancellable: false
+        },
+        async () => {
+          const files = await scanner.scanPhpFiles(this.currentResult!.rootPath);
+          const newResult = await analyzer.analyze(this.currentResult!.rootPath, files);
+
+          // 保存された位置情報を読み込み
+          const savedState = await this.loadGraphState(this.currentResult!.rootPath);
+          const isFirstTime = !savedState;
+
+          // グラフデータを準備
+          const graphData = this.prepareGraphData(newResult);
+
+          // HTMLを更新
+          this.currentPanel!.webview.html = this.getHtmlContent(newResult, graphData, isFirstTime, savedState);
+          this.currentResult = newResult;
+
+          vscode.window.showInformationMessage('グラフを更新しました');
+        }
+      );
+    } catch (error) {
+      vscode.window.showErrorMessage(`グラフの更新に失敗しました: ${error}`);
+    }
+  }
+
+  /**
+   * グラフの状態を保存
+   */
+  private static async saveGraphState(projectRoot: string, nodePositions: any): Promise<void> {
+    const stateFilePath = path.join(projectRoot, this.GRAPH_STATE_FILE);
+    const state = {
+      projectRoot,
+      timestamp: Date.now(),
+      nodePositions
+    };
+
+    await fs.promises.writeFile(
+      stateFilePath,
+      JSON.stringify(state, null, 2),
+      'utf-8'
+    );
+  }
+
+  /**
+   * 保存されたグラフの状態を読み込み
+   */
+  private static async loadGraphState(projectRoot: string): Promise<any | null> {
+    const stateFilePath = path.join(projectRoot, this.GRAPH_STATE_FILE);
+
+    try {
+      const content = await fs.promises.readFile(stateFilePath, 'utf-8');
+      return JSON.parse(content);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * HTMLコンテンツを生成
    */
-  private static getHtmlContent(result: DependencyAnalysisResult, graphData: any): string {
+  private static getHtmlContent(result: DependencyAnalysisResult, graphData: any, isFirstTime: boolean, savedState: any): string {
     const graph = result.graph;
 
     return `<!DOCTYPE html>
@@ -288,9 +392,11 @@ export class DependencyGraphPanel {
   <div class="container">
     <div class="graph-area">
       <div class="controls">
+        <button class="control-btn" onclick="saveState()">💾 保存</button>
+        <button class="control-btn" onclick="refreshGraph()">🔄 更新</button>
         <button class="control-btn" onclick="zoomIn()">🔍 拡大</button>
         <button class="control-btn" onclick="zoomOut()">🔍 縮小</button>
-        <button class="control-btn" onclick="resetView()">🔄 リセット</button>
+        <button class="control-btn" onclick="resetView()">↺ リセット</button>
       </div>
       <svg id="graph-svg"></svg>
       <div class="legend">
@@ -334,6 +440,8 @@ export class DependencyGraphPanel {
   <script>
     const vscode = acquireVsCodeApi();
     const graphData = ${JSON.stringify(graphData)};
+    const isFirstTime = ${isFirstTime};
+    const savedState = ${JSON.stringify(savedState)};
 
     let scale = 1;
     let translateX = 0;
@@ -382,6 +490,21 @@ export class DependencyGraphPanel {
       return DIRECTORY_COLORS[dirType] || DIRECTORY_COLORS.default;
     }
 
+    // 状態を保存
+    function saveState() {
+      vscode.postMessage({
+        command: 'saveState',
+        nodePositions: nodePositions
+      });
+    }
+
+    // グラフを更新
+    function refreshGraph() {
+      vscode.postMessage({
+        command: 'refresh'
+      });
+    }
+
     // グラフを描画
     function renderGraph() {
       const svg = document.getElementById('graph-svg');
@@ -390,6 +513,15 @@ export class DependencyGraphPanel {
 
       // レイアウト計算（重ならないように間隔を広げる）
       nodePositions = calculateLayout(graphData.nodes, graphData.edges, width, height);
+
+      // 保存された位置情報があれば適用
+      if (savedState && savedState.nodePositions) {
+        for (const nodeId in savedState.nodePositions) {
+          if (nodePositions[nodeId]) {
+            nodePositions[nodeId] = savedState.nodePositions[nodeId];
+          }
+        }
+      }
 
       // SVG内容をクリア
       svg.innerHTML = '';
