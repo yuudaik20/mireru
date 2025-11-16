@@ -10,3 +10,4 @@ dist
 coverage
 .cache
 *.map
+.mireru-graph-state.json

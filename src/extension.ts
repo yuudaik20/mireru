@@ -7,17 +7,23 @@ import * as vscode from 'vscode';
 import { ClaudeService } from './services/ClaudeService';
 import { PhpParser } from './parser/PhpParser';
 import { LaravelAnalyzer } from './laravel/LaravelAnalyzer';
+import { DependencyGraphWebView } from './services/DependencyGraphWebView';
 import { AIConfig } from './types/claude';
 
 let claudeService: ClaudeService;
 let _phpParser: PhpParser;
 let laravelAnalyzer: LaravelAnalyzer;
+let dependencyGraphWebView: DependencyGraphWebView | undefined;
+let extensionContext: vscode.ExtensionContext;
 
 /**
  * 拡張機能がアクティベートされたときに呼ばれる
  */
 export function activate(context: vscode.ExtensionContext) {
   console.log('Mireru extension is now active!');
+
+  // コンテキストを保存
+  extensionContext = context;
 
   // サービスの初期化
   claudeService = new ClaudeService();
@@ -236,9 +242,24 @@ async function handleShowProjectMapCommand() {
  * 依存関係グラフ表示コマンドを処理
  */
 async function handleShowDependencyGraphCommand() {
-  vscode.window.showInformationMessage(
-    'この機能は実装中です (依存関係グラフを表示)'
-  );
+  const workspaceFolders = vscode.workspace.workspaceFolders;
+  if (!workspaceFolders) {
+    vscode.window.showErrorMessage('ワークスペースが開かれていません');
+    return;
+  }
+
+  const projectRoot = workspaceFolders[0].uri.fsPath;
+
+  try {
+    // WebViewを作成して表示
+    if (!dependencyGraphWebView) {
+      dependencyGraphWebView = new DependencyGraphWebView(projectRoot);
+    }
+
+    await dependencyGraphWebView.show(extensionContext);
+  } catch (error) {
+    vscode.window.showErrorMessage(`依存関係グラフの表示に失敗しました: ${error}`);
+  }
 }
 
 /**
